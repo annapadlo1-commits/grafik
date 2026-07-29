@@ -1,6 +1,6 @@
 const GP = Object.freeze({
-  VERSION: '2.0.0-DEMO',
-  NAME: 'GRAFIK PRO DEMO 2.0',
+  VERSION: '2.1.1-DEMO-PERFORMANCE',
+  NAME: 'GRAFIK PRO DEMO 2.1',
   TZ: 'Europe/Warsaw',
   LOCALE: 'pl_PL',
   SHEETS: {
@@ -27,6 +27,7 @@ const GP = Object.freeze({
     EXPORT: 'EKSPORT_KADROMIERZ',
     BACKUPS: 'KOPIE_ZAPASOWE',
     TESTS: 'TESTY'
+    ,CENTRALS: 'CENTRALE'
   },
   ROLES: {
     ADMIN: 'ADMIN',
@@ -86,6 +87,7 @@ const GP_HEADERS = Object.freeze({
   [GP.SHEETS.EXPORT]: ['PRACOWNIK', 'DATA', 'OD', 'DO', 'LOKALIZACJA', 'TYP_ZMIANY', 'UWAGI'],
   [GP.SHEETS.BACKUPS]: ['ID', 'UTWORZONO', 'UTWORZYŁ', 'TYP', 'OPIS', 'PLIK_ID'],
   [GP.SHEETS.TESTS]: ['CZAS', 'TEST', 'STATUS', 'SZCZEGÓŁY']
+  ,[GP.SHEETS.CENTRALS]: ['KLUCZ', 'WARTOŚĆ', 'OPIS', 'STATUS']
 });
 
 function gpSs_() {

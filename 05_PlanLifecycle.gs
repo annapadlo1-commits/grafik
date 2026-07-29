@@ -35,7 +35,9 @@ function gpClonePlan(planId,name,scenario) {
   const src=gpGetPlan(planId), newId=gpId_('PLAN');
   const copy=Object.assign({},src.plan,{ID:newId,NAZWA:name||`${src.plan.NAZWA} – kopia`,SCENARIUSZ:scenario||'WHAT-IF',STATUS:GP.PLAN_STATUS.DRAFT,UTWORZYŁ:gpCurrentUser_().email,UTWORZONO:gpNow_()});
   delete copy._row; gpAppend_(GP.SHEETS.PLANS,copy);
-  src.assignments.forEach(a=>{const x=Object.assign({},a,{ID:gpId_('ASG'),PLAN_ID:newId,ŹRÓDŁO:'KOPIA'});delete x._row;gpAppend_(GP.SHEETS.ASSIGNMENTS,x);});
+  const existing=gpRows_(GP.SHEETS.ASSIGNMENTS).map(a=>{const x=Object.assign({},a);delete x._row;return x;});
+  const cloned=src.assignments.map(a=>{const x=Object.assign({},a,{ID:gpId_('ASG'),PLAN_ID:newId,ŹRÓDŁO:'KOPIA'});delete x._row;return x;});
+  gpReplaceRows_(GP.SHEETS.ASSIGNMENTS,existing.concat(cloned));
   gpSaveVersion_(newId,`Kopia planu ${planId}`); gpAudit_('CLONE','PLAN',newId,null,{source:planId});
   return gpGetPlan(newId);
 }
@@ -43,7 +45,9 @@ function gpClonePlan(planId,name,scenario) {
 function gpSaveVersion_(planId,reason) {
   const assignments=gpRows_(GP.SHEETS.ASSIGNMENTS).filter(a=>a.PLAN_ID===planId).map(a=>{const x=Object.assign({},a);delete x._row;return x;});
   const existing=gpRows_(GP.SHEETS.VERSIONS).filter(v=>v.PLAN_ID===planId);
-  gpAppend_(GP.SHEETS.VERSIONS,{ID:gpId_('VER'),PLAN_ID:planId,WERSJA:existing.length+1,UTWORZYŁ:gpCurrentUser_().email,UTWORZONO:gpNow_(),POWÓD:reason,SNAPSHOT_JSON:JSON.stringify(assignments)});
+  const json=JSON.stringify(assignments);
+  const compressed=Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(json,'application/json')).getBytes());
+  gpAppend_(GP.SHEETS.VERSIONS,{ID:gpId_('VER'),PLAN_ID:planId,WERSJA:existing.length+1,UTWORZYŁ:gpCurrentUser_().email,UTWORZONO:gpNow_(),POWÓD:reason,SNAPSHOT_JSON:`GZ:${compressed}`});
 }
 
 function gpRestoreVersion(versionId) {
@@ -51,7 +55,9 @@ function gpRestoreVersion(versionId) {
   const version=gpRows_(GP.SHEETS.VERSIONS).find(v=>v.ID===versionId);
   if(!version) throw new Error('Nie znaleziono wersji.');
   const all=gpRows_(GP.SHEETS.ASSIGNMENTS).filter(a=>a.PLAN_ID!==version.PLAN_ID);
-  const restored=JSON.parse(version.SNAPSHOT_JSON);
+  const raw=String(version.SNAPSHOT_JSON||'');
+  const json=raw.startsWith('GZ:')?Utilities.ungzip(Utilities.newBlob(Utilities.base64Decode(raw.slice(3)))).getDataAsString():raw;
+  const restored=JSON.parse(json);
   gpReplaceRows_(GP.SHEETS.ASSIGNMENTS,all.concat(restored));
   gpSaveVersion_(version.PLAN_ID,`Przywrócono wersję ${version.WERSJA}`);
   gpAudit_('RESTORE','PLAN',version.PLAN_ID,null,{version:version.WERSJA});
@@ -71,9 +77,13 @@ function gpValidatePlan_(planId) {
     if(gpIsAbsent_(a.PRACOWNIK_ID,gpDate_(a.DATA),ctx.absences)) errors.push({type:'PRACA_W_NIEOBECNOŚĆ',assignment:a.ID});
   });
   Object.keys(byEmployeeDate).forEach(k=>{if(byEmployeeDate[k].filter(a=>a.STANDBY!=='TAK').length>1)errors.push({type:'DWIE_ZMIANY_JEDNEGO_DNIA',key:k});});
-  const demand=ctx.demand;
+  const demand=ctx.demand,coverageIndex={};
+  asg.forEach(a=>{
+    const key=`${gpDate_(a.DATA)}|${a.LOKALIZACJA_ID}|${a.ZMIANA_ID}`;
+    coverageIndex[key]=(coverageIndex[key]||0)+1;
+  });
   demand.forEach(d=>{
-    const count=asg.filter(a=>gpDate_(a.DATA)===gpDate_(d.DATA)&&a.LOKALIZACJA_ID===d.LOKALIZACJA_ID&&a.ZMIANA_ID===d.ZMIANA_ID).length;
+    const count=coverageIndex[`${gpDate_(d.DATA)}|${d.LOKALIZACJA_ID}|${d.ZMIANA_ID}`]||0;
     if(count<Number(d.MIN_OSÓB||0)) warnings.push({type:'NIEDOBÓR',date:gpDate_(d.DATA),location:d.LOKALIZACJA_ID,shift:d.ZMIANA_ID,missing:Number(d.MIN_OSÓB)-count});
   });
   return {ok:errors.length===0,errors,warnings};

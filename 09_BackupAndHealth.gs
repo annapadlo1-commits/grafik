@@ -30,6 +30,8 @@ function gpRunAllTests() {
   run('Zapotrzebowanie',()=>{if(gpRows_(GP.SHEETS.DEMAND).length<100)throw new Error('Za mało rekordów');});
   run('Reguła lokalizacji',()=>{const ctx=gpBuildPlanningContext_(gpMonth_(new Date()),'ZRÓWNOWAŻONY',{}),emp=ctx.employees.find(e=>String(ctx.maps.contract[e.ID].DOZWOLONE_LOKALIZACJE).split(',').length===1);if(emp){const forbidden=ctx.maps.contract[emp.ID].DOZWOLONE_LOKALIZACJE==='LOC-CENTRUM'?'LOC-OGRODY':'LOC-CENTRUM';const slot=Object.assign({},ctx.demand[0],{LOKALIZACJA_ID:forbidden});if(gpCandidate_(emp,slot,ctx,Object.fromEntries(ctx.employees.map(e=>[e.ID,{hours:0,days:{},weekly:{},locations:{},last:null,cost:0}]))).eligible)throw new Error('Reguła nie działa');}});
   run('Ochrona kosztów',()=>{if(!gpSs_().getSheetByName(GP.SHEETS.COSTS).isSheetHidden())throw new Error('Arkusz kosztów widoczny');});
+  run('Indeksy silnika',()=>{const ctx=gpBuildPlanningContext_(gpMonth_(new Date()),'ZRÓWNOWAŻONY',{});if(!ctx.availabilityIndex||!ctx.absenceIndex||!ctx.rules)throw new Error('Brak indeksów wydajności');});
+  run('Test wydajności optymalizatora',()=>{const ctx=gpBuildPlanningContext_(gpMonth_(new Date()),'ZRÓWNOWAŻONY',{}),start=Date.now();gpOptimize_(ctx);const ms=Date.now()-start;if(ms>45000)throw new Error(`Optymalizacja trwała ${ms} ms`);});
   gpReplaceRows_(GP.SHEETS.TESTS,results);
   const passed=results.filter(r=>r.STATUS==='PASS').length;
   return {ok:passed===results.length,passed,total:results.length,results};

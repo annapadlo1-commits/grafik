@@ -1,9 +1,11 @@
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('GRAFIK PRO')
-    .addItem('Otwórz aplikację', 'gpOpenSidebar')
+    .addItem('Otwórz aplikację NA PEŁNYM EKRANIE', 'gpOpenFullApp')
+    .addItem('Panel szybkich działań', 'gpOpenQuickPanel')
     .addSeparator()
     .addItem('Instaluj / napraw strukturę', 'gpInstall')
     .addItem('Załaduj pełne dane DEMO', 'gpLoadDemo')
+    .addItem('Synchronizuj trzy centrale', 'gpSyncCentrals')
     .addItem('Uruchom testy', 'gpRunAllTests')
     .addItem('Utwórz kopię bezpieczeństwa', 'gpCreateBackup')
     .addToUi();
@@ -26,6 +28,7 @@ function gpInstall() {
       if ([GP.SHEETS.COSTS, GP.SHEETS.USERS, GP.SHEETS.CONFIG].includes(name)) sh.hideSheet();
     });
     gpSeedConfig_();
+    gpSeedCentralConfig_();
     gpApplyValidations_();
     gpCreateDashboard_();
     PropertiesService.getDocumentProperties().setProperty('GP_VERSION', GP.VERSION);
@@ -33,6 +36,20 @@ function gpInstall() {
     SpreadsheetApp.getActive().toast('Struktura GRAFIK PRO jest gotowa.', GP.NAME, 6);
     return {ok: true, version: GP.VERSION, sheets: Object.keys(GP_HEADERS).length};
   });
+}
+
+function gpSeedCentralConfig_() {
+  const sh=gpSheet_(GP.SHEETS.CENTRALS);
+  if(sh.getLastRow()>1)return;
+  const rows=[
+    ['USTAWIENIA_FILE_ID','','ID pliku GRAFIK PRO — USTAWIENIA I BAZA','NIEPOŁĄCZONO'],
+    ['HR_FINANSE_FILE_ID','','ID pliku GRAFIK PRO — HR I FINANSE','NIEPOŁĄCZONO'],
+    ['OSTATNIA_SYNCHRONIZACJA','','Data ostatniego poprawnego odświeżenia','OCZEKUJE'],
+    ['WERSJA_SNAPSHOTU','','Wersja lokalnej kopii danych','OCZEKUJE']
+  ];
+  sh.getRange(2,1,rows.length,rows[0].length).setValues(rows);
+  sh.setColumnWidth(1,230);sh.setColumnWidth(2,360);sh.setColumnWidth(3,420);sh.setColumnWidth(4,150);
+  sh.showSheet();
 }
 
 function gpSeedConfig_() {

@@ -1,12 +1,15 @@
 function gpGeneratePlan(request) {
   gpRequireRole_([GP.ROLES.ADMIN, GP.ROLES.MANAGER]);
+  const started=Date.now(),timings={};
   request = request || {};
   const month = gpMonth_(request.month || new Date());
   const mode = request.mode || 'ZRÓWNOWAŻONY';
   const scenario = request.scenario || 'BAZOWY';
   const planId = gpId_('PLAN');
   const data = gpBuildPlanningContext_(month, mode, request);
+  timings.loadMs=Date.now()-started;
   const result = gpOptimize_(data);
+  timings.optimizeMs=Date.now()-started-timings.loadMs;
   const plan = {
     ID:planId, NAZWA:request.name || `Plan ${month} • ${scenario}`, MIESIĄC:month,
     SCENARIUSZ:scenario, TRYB:mode, STATUS:GP.PLAN_STATUS.DRAFT,
@@ -14,13 +17,18 @@ function gpGeneratePlan(request) {
     WYNIK:result.score, KOSZT:result.cost, UWAGI:result.summary
   };
   gpAppend_(GP.SHEETS.PLANS, plan);
-  result.assignments.forEach(a => gpAppend_(GP.SHEETS.ASSIGNMENTS, Object.assign({
-    ID:gpId_('ASG'), PLAN_ID:planId, STATUS:GP.ASSIGNMENT_STATUS.PLANNED, ŹRÓDŁO:'SILNIK'
-  }, a)));
+  const existingAssignments=gpRows_(GP.SHEETS.ASSIGNMENTS).map(a=>{const x=Object.assign({},a);delete x._row;return x;});
+  const generated=result.assignments.map(a=>Object.assign({
+    ID:gpId_('ASG'),PLAN_ID:planId,STATUS:GP.ASSIGNMENT_STATUS.PLANNED,ŹRÓDŁO:'SILNIK'
+  },a));
+  gpReplaceRows_(GP.SHEETS.ASSIGNMENTS,existingAssignments.concat(generated));
+  timings.writeMs=Date.now()-started-timings.loadMs-timings.optimizeMs;
   gpSaveVersion_(planId, 'Plan wygenerowany automatycznie');
   gpWriteKpis_(planId, result.kpis);
-  gpAudit_('GENERATE', 'PLAN', planId, null, {plan, kpis:result.kpis});
-  return {ok:true, plan, result};
+  timings.finalizeMs=Date.now()-started-timings.loadMs-timings.optimizeMs-timings.writeMs;
+  timings.totalMs=Date.now()-started;
+  gpAudit_('GENERATE', 'PLAN', planId, null, {plan,kpis:result.kpis,timings});
+  return {ok:true,plan,result,timings};
 }
 
 function gpBuildPlanningContext_(month, mode, request) {
@@ -32,12 +40,24 @@ function gpBuildPlanningContext_(month, mode, request) {
   const absences = gpRows_(GP.SHEETS.ABSENCES);
   const events = gpRows_(GP.SHEETS.EVENTS);
   const budgets = gpRows_(GP.SHEETS.BUDGETS).filter(r => String(r.MIESIĄC).slice(0,7) === month);
+  const rules=gpConfig_();
   const maps = {
     contract:Object.fromEntries(contracts.map(r => [r.PRACOWNIK_ID,r])),
     shift:Object.fromEntries(shifts.map(r => [r.ID,r])),
     emp:Object.fromEntries(employees.map(r => [r.ID,r]))
   };
-  return {month, mode, request, employees, demand, availability, absences, events, budgets, maps};
+  const availabilityIndex={};
+  availability.forEach(a=>{
+    const key=`${a.PRACOWNIK_ID}|${gpDate_(a.DATA)}`;
+    (availabilityIndex[key]||(availabilityIndex[key]=[])).push(a);
+  });
+  const absenceIndex={};
+  absences.forEach(a=>{
+    if(String(a.STATUS).toUpperCase()==='ODRZUCONA')return;
+    const from=new Date(`${gpDate_(a.OD)}T12:00:00`),to=new Date(`${gpDate_(a.DO)}T12:00:00`);
+    for(let d=new Date(from);d<=to;d.setDate(d.getDate()+1))absenceIndex[`${a.PRACOWNIK_ID}|${gpDate_(d)}`]=true;
+  });
+  return {month,mode,request,employees,demand,availability,absences,events,budgets,maps,rules,availabilityIndex,absenceIndex};
 }
 
 function gpOptimize_(ctx) {
@@ -89,10 +109,10 @@ function gpCandidate_(emp, slot, ctx, state) {
   if (allowed.length && !allowed.includes(slot.LOKALIZACJA_ID)) return {emp,eligible:false,score:-Infinity,preference:0,reason:'Lokalizacja niedozwolona'};
   if (String(contract.TYLKO_RANO).toUpperCase()==='TAK' && slot.ZMIANA_ID!=='RANO') return {emp,eligible:false,score:-Infinity,preference:0,reason:'Tylko rano'};
   if (st.days[date]) return {emp,eligible:false,score:-Infinity,preference:0,reason:'Inna zmiana tego dnia'};
-  if (gpIsAbsent_(emp.ID,date,ctx.absences)) return {emp,eligible:false,score:-Infinity,preference:0,reason:'Nieobecność'};
-  const av = ctx.availability.filter(a=>a.PRACOWNIK_ID===emp.ID && gpDate_(a.DATA)===date);
+  if (ctx.absenceIndex[`${emp.ID}|${date}`]) return {emp,eligible:false,score:-Infinity,preference:0,reason:'Nieobecność'};
+  const av = ctx.availabilityIndex[`${emp.ID}|${date}`] || [];
   if (av.some(a=>String(a.STATUS).toUpperCase()==='NIEDOSTĘPNY')) return {emp,eligible:false,score:-Infinity,preference:0,reason:'Niedostępny'};
-  if (!gpHasRest_(st.last, date, shift, Number(gpConfig_().MIN_ODPOCZYNEK_H||11))) return {emp,eligible:false,score:-Infinity,preference:0,reason:'Brak odpoczynku'};
+  if (!gpHasRest_(st.last, date, shift, Number(ctx.rules.MIN_ODPOCZYNEK_H||11))) return {emp,eligible:false,score:-Infinity,preference:0,reason:'Brak odpoczynku'};
   const week = gpWeekKey_(date), maxWeek = Number(contract.MAX_H_TYDZIEŃ||48);
   if (Number(st.weekly[week]||0)+Number(shift.PŁATNE_H||8)>maxWeek) return {emp,eligible:false,score:-Infinity,preference:0,reason:'Limit tygodniowy'};
   if (gpConsecutive_(st.days,date)>=Number(contract.MAX_DNI_Z_RZĘDU||6)) return {emp,eligible:false,score:-Infinity,preference:0,reason:'Limit dni z rzędu'};

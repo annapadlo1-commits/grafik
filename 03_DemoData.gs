@@ -1,6 +1,7 @@
 function gpLoadDemo() {
   gpInstall();
   return gpLock_(() => {
+    const useCentrals=gpCentralStatus_().connected;
     const today = new Date();
     const month = gpMonth_(today);
     const locations = [
@@ -29,23 +30,25 @@ function gpLoadDemo() {
     users.push({EMAIL:'ksiegowosc@demo.pl', ROLA:GP.ROLES.ACCOUNTING, PRACOWNIK_ID:'', LOKALIZACJE:'LOC-CENTRUM,LOC-OGRODY', AKTYWNY:'TAK'});
     users.push({EMAIL:'kierownik.centrum@demo.pl', ROLA:GP.ROLES.MANAGER, PRACOWNIK_ID:'P001', LOKALIZACJE:'LOC-CENTRUM', AKTYWNY:'TAK'});
     users.push({EMAIL:'kierownik.ogrody@demo.pl', ROLA:GP.ROLES.MANAGER, PRACOWNIK_ID:'P002', LOKALIZACJE:'LOC-OGRODY', AKTYWNY:'TAK'});
-    gpReplaceRows_(GP.SHEETS.LOCATIONS, locations);
-    gpReplaceRows_(GP.SHEETS.SHIFT_TYPES, shifts);
-    gpReplaceRows_(GP.SHEETS.EMPLOYEES, employees);
-    gpReplaceRows_(GP.SHEETS.CONTRACTS, contracts);
-    gpReplaceRows_(GP.SHEETS.USERS, users);
+    if(!useCentrals){
+      gpReplaceRows_(GP.SHEETS.LOCATIONS, locations);
+      gpReplaceRows_(GP.SHEETS.SHIFT_TYPES, shifts);
+      gpReplaceRows_(GP.SHEETS.EMPLOYEES, employees);
+      gpReplaceRows_(GP.SHEETS.CONTRACTS, contracts);
+      gpReplaceRows_(GP.SHEETS.USERS, users);
+    }
     gpGenerateDemoDemand_(month);
-    gpGenerateDemoAvailability_(month, employees);
-    gpReplaceRows_(GP.SHEETS.BUDGETS, [
-      {MIESIĄC:month, LOKALIZACJA_ID:'LOC-CENTRUM', BUDŻET:85000, LIMIT_H:2200, OSTRZEŻENIE_PROC:90, AKTYWNY:'TAK'},
-      {MIESIĄC:month, LOKALIZACJA_ID:'LOC-OGRODY', BUDŻET:79000, LIMIT_H:2050, OSTRZEŻENIE_PROC:90, AKTYWNY:'TAK'}
-    ]);
+    gpGenerateDemoAvailability_(month,useCentrals?gpRows_(GP.SHEETS.EMPLOYEES):employees);
+    if(!useCentrals)gpReplaceRows_(GP.SHEETS.BUDGETS, [
+        {MIESIĄC:month, LOKALIZACJA_ID:'LOC-CENTRUM', BUDŻET:85000, LIMIT_H:2200, OSTRZEŻENIE_PROC:90, AKTYWNY:'TAK'},
+        {MIESIĄC:month, LOKALIZACJA_ID:'LOC-OGRODY', BUDŻET:79000, LIMIT_H:2050, OSTRZEŻENIE_PROC:90, AKTYWNY:'TAK'}
+      ]);
     gpReplaceRows_(GP.SHEETS.EVENTS, [
       {ID:'EV-WEEKEND', NAZWA:'Weekend promocyjny', OD:`${month}-10`, DO:`${month}-12`, LOKALIZACJA_ID:'LOC-CENTRUM', MNOŻNIK_ZAPOTRZEBOWANIA:1.3, DODATKOWE_OSOBY:1, UWAGI:'Większy ruch'},
       {ID:'EV-TARGI', NAZWA:'Targi miejskie', OD:`${month}-20`, DO:`${month}-21`, LOKALIZACJA_ID:'LOC-OGRODY', MNOŻNIK_ZAPOTRZEBOWANIA:1.5, DODATKOWE_OSOBY:2, UWAGI:'Dodatkowa zmiana'}
     ]);
     gpAudit_('LOAD_DEMO', 'SYSTEM', month, null, {employees:60, locations:2});
-    return {ok:true, month, employees:60, message:'Pełne dane demonstracyjne zostały załadowane.'};
+    return {ok:true, month, employees:(useCentrals?gpRows_(GP.SHEETS.EMPLOYEES):employees).length, centralMode:useCentrals, message:'Dane demonstracyjne zostały załadowane.'};
   });
 }
 
