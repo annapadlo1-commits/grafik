@@ -11,11 +11,14 @@ function gpSyncCentrals(){
       const locations=gpReadExternal_(settings,'LOKALIZACJE');
       const shifts=gpReadExternal_(settings,'TYPY_ZMIAN');
       const rules=gpReadExternal_(settings,'REGUŁY_PLANOWANIA');
+      const scenarios=gpReadExternal_(settings,'SCENARIUSZE');
+      const modes=gpReadExternal_(settings,'TRYBY_OPTYMALIZACJI');
+      const levels=gpReadExternal_(settings,'POZIOMY_OBSADY');
       const costs=gpReadExternal_(finance,'KOSZTY_PRACOWNIKÓW');
       const budgets=gpReadExternal_(finance,'BUDŻETY_LOKALIZACJI');
       const validation=gpValidateCentralPayload_(db,locations,costs,budgets);
       if(!validation.ok)throw new Error(`Synchronizacja zablokowana: ${validation.errors.slice(0,8).join('; ')}`);
-      gpApplySettingsSnapshot_(db,locations,shifts,rules);
+      gpApplySettingsSnapshot_(db,locations,shifts,rules,scenarios,modes,levels);
       gpApplyFinanceSnapshot_(costs,budgets);
       const stamp=gpNow_(),version=Utilities.getUuid().slice(0,8).toUpperCase();
       gpSetCentralStatus_('OSTATNIA_SYNCHRONIZACJA',stamp,'POŁĄCZONO');
@@ -23,7 +26,7 @@ function gpSyncCentrals(){
       PropertiesService.getDocumentProperties().setProperty('GP_LAST_GOOD_CENTRAL_SYNC',JSON.stringify({version,stamp,employees:db.length}));
       gpAudit_('SYNC','CENTRALE',version,null,{employees:db.length,locations:locations.length,costs:costs.length,budgets:budgets.length});
       SpreadsheetApp.getActive().toast(`Synchronizacja zakończona: ${db.length} pracowników.`,'GRAFIK PRO',7);
-      return {ok:true,version,stamp,employees:db.length,validation};
+      return {ok:true,version,stamp,employees:db.length,scenarios:scenarios.length,modes:modes.length,levels:levels.length,validation};
     }catch(e){
       gpRestoreLocalSnapshot_(before);
       gpSetCentralStatus_('OSTATNIA_SYNCHRONIZACJA',gpNow_(),'BŁĄD');
@@ -65,12 +68,12 @@ function gpValidateCentralPayload_(db,locations,costs,budgets){
   return {ok:errors.length===0,errors,warnings};
 }
 
-function gpApplySettingsSnapshot_(db,locations,shifts,rules){
+function gpApplySettingsSnapshot_(db,locations,shifts,rules,scenarios,modes,levels){
   const employees=[],contracts=[],users=[];
   db.forEach(r=>{
     const id=r['PRACOWNIK_ID*'],active=String(r['AKTYWNY*']).toUpperCase()==='TAK'?'TAK':'NIE';
     employees.push({ID:id,IMIĘ_I_NAZWISKO:r['IMIĘ_I_NAZWISKO*'],EMAIL:r['EMAIL*'],TELEFON:r.TELEFON,AKTYWNY:active,DOMYŚLNA_LOKALIZACJA:r['LOKALIZACJA_DOMYŚLNA*'],UMIEJĘTNOŚCI:r['KOMPETENCJE*'],PRIORYTET:r.PRIORYTET_PLANOWANIA});
-    contracts.push({PRACOWNIK_ID:id,TYP_UMOWY:r['TYP_UMOWY*'],ETAT:r['ETAT*'],GODZINY_MIESIĘCZNE:r['GODZINY_MIESIĘCZNE*'],STAWKA_GODZINOWA:'',KOSZT_PRACODAWCY_H:'',OD:r['DATA_ZATRUDNIENIA_OD*'],DO:r.DATA_ZATRUDNIENIA_DO,TYLKO_RANO:r.TYLKO_RANO,DOZWOLONE_LOKALIZACJE:r['DOZWOLONE_LOKALIZACJE*'],MAX_DNI_Z_RZĘDU:r.MAX_DNI_Z_RZĘDU,MAX_H_TYDZIEŃ:r.MAX_GODZIN_TYGODNIOWO});
+    contracts.push({PRACOWNIK_ID:id,TYP_UMOWY:r['TYP_UMOWY*'],ETAT:r['ETAT*'],GODZINY_MIESIĘCZNE:r['GODZINY_MIESIĘCZNE*'],STAWKA_GODZINOWA:'',KOSZT_PRACODAWCY_H:'',OD:r['DATA_ZATRUDNIENIA_OD*'],DO:r.DATA_ZATRUDNIENIA_DO,TYLKO_RANO:r.TYLKO_RANO,DOZWOLONE_LOKALIZACJE:r['DOZWOLONE_LOKALIZACJE*'],MAX_DNI_Z_RZĘDU:r.MAX_DNI_Z_RZĘDU,MAX_H_TYDZIEŃ:r.MAX_GODZIN_TYGODNIOWO,TYLKO_POPOŁUDNIE:r.TYLKO_POPOŁUDNIE,BEZ_WEEKENDÓW:r.BEZ_WEEKENDÓW,DOSTĘPNY_STANDBY:r.DOSTĘPNY_STANDBY,MIN_ODPOCZYNEK_H:r.MIN_ODPOCZYNEK_H});
     users.push({EMAIL:r['EMAIL*'],ROLA:r['ROLA_APLIKACJI*']||GP.ROLES.EMPLOYEE,PRACOWNIK_ID:id,LOKALIZACJE:r['DOZWOLONE_LOKALIZACJE*'],AKTYWNY:active});
   });
   locations.forEach(r=>{}); // walidacja odbywa się przed zapisem
@@ -80,6 +83,9 @@ function gpApplySettingsSnapshot_(db,locations,shifts,rules){
   const cfg=gpRows_(GP.SHEETS.CONFIG),map=Object.fromEntries(cfg.map((x,i)=>[x.KLUCZ,i]));
   rules.forEach(r=>{const key=r.KLUCZ;if(map[key]!==undefined)cfg[map[key]].WARTOŚĆ=r.WARTOŚĆ;else cfg.push({KLUCZ:key,WARTOŚĆ:r.WARTOŚĆ,OPIS:r.OPIS,EDYTOWALNE:r.EDYTOWALNE});});
   gpReplaceRows_(GP.SHEETS.CONFIG,cfg);
+  gpReplaceRows_(GP.SHEETS.SCENARIOS,scenarios.map(r=>({SCENARIUSZ_ID:r['SCENARIUSZ_ID*'],NAZWA:r['NAZWA*'],MNOŻNIK_ZAPOTRZEBOWANIA:r['MNOŻNIK_ZAPOTRZEBOWANIA*'],MNOŻNIK_BUDŻETU:r['MNOŻNIK_BUDŻETU*'],DOMYŚLNY_POZIOM_OBSADY:r.DOMYŚLNY_POZIOM_OBSADY,NADGODZINY:r.NADGODZINY,MAX_NADGODZIN_H:r.MAX_NADGODZIN_H,REDUKCJA_DOSTĘPNOŚCI_PROC:r.REDUKCJA_DOSTĘPNOŚCI_PROC,ZATRUDNIENIE_CZASOWE:r.ZATRUDNIENIE_CZASOWE,AKTYWNY:r.AKTYWNY,OPIS:r.OPIS})));
+  gpReplaceRows_(GP.SHEETS.MODES,modes.map(r=>({TRYB_ID:r['TRYB_ID*'],NAZWA:r['NAZWA*'],WAGA_KOSZT_PROC:r['WAGA_KOSZT_PROC*'],WAGA_PREFERENCJE_PROC:r['WAGA_PREFERENCJE_PROC*'],WAGA_SPRAWIEDLIWOŚĆ_PROC:r['WAGA_SPRAWIEDLIWOŚĆ_PROC*'],WAGA_POKRYCIE_PROC:r['WAGA_POKRYCIE_PROC*'],WAGA_CIĄGŁOŚĆ_PROC:r['WAGA_CIĄGŁOŚĆ_PROC*'],AKTYWNY:r.AKTYWNY,OPIS:r.OPIS})));
+  gpReplaceRows_(GP.SHEETS.LEVELS,levels.map(r=>({POZIOM_ID:r['POZIOM_ID*'],NAZWA:r['NAZWA*'],ŹRÓDŁO_CELU:r['ŹRÓDŁO_CELU*'],MNOŻNIK:r['MNOŻNIK*'],LIMIT_BUDŻETU_PROC:r.LIMIT_BUDŻETU_PROC,AKTYWNY:r.AKTYWNY,OPIS:r.OPIS})));
 }
 
 function gpApplyFinanceSnapshot_(costs,budgets){
@@ -92,7 +98,7 @@ function gpApplyFinanceSnapshot_(costs,budgets){
 
 function gpCreateLocalSnapshot_(){
   const clean=name=>gpRows_(name).map(r=>{const x=Object.assign({},r);delete x._row;return x;});
-  return {employees:clean(GP.SHEETS.EMPLOYEES),contracts:clean(GP.SHEETS.CONTRACTS),users:clean(GP.SHEETS.USERS),locations:clean(GP.SHEETS.LOCATIONS),shifts:clean(GP.SHEETS.SHIFT_TYPES),config:clean(GP.SHEETS.CONFIG),costs:clean(GP.SHEETS.COSTS),budgets:clean(GP.SHEETS.BUDGETS),created:gpNow_()};
+  return {employees:clean(GP.SHEETS.EMPLOYEES),contracts:clean(GP.SHEETS.CONTRACTS),users:clean(GP.SHEETS.USERS),locations:clean(GP.SHEETS.LOCATIONS),shifts:clean(GP.SHEETS.SHIFT_TYPES),config:clean(GP.SHEETS.CONFIG),scenarios:clean(GP.SHEETS.SCENARIOS),modes:clean(GP.SHEETS.MODES),levels:clean(GP.SHEETS.LEVELS),costs:clean(GP.SHEETS.COSTS),budgets:clean(GP.SHEETS.BUDGETS),created:gpNow_()};
 }
 
 function gpRestoreLocalSnapshot_(s){
@@ -103,6 +109,9 @@ function gpRestoreLocalSnapshot_(s){
   gpReplaceRows_(GP.SHEETS.LOCATIONS,s.locations||[]);
   gpReplaceRows_(GP.SHEETS.SHIFT_TYPES,s.shifts||[]);
   gpReplaceRows_(GP.SHEETS.CONFIG,s.config||[]);
+  gpReplaceRows_(GP.SHEETS.SCENARIOS,s.scenarios||[]);
+  gpReplaceRows_(GP.SHEETS.MODES,s.modes||[]);
+  gpReplaceRows_(GP.SHEETS.LEVELS,s.levels||[]);
   gpReplaceRows_(GP.SHEETS.COSTS,s.costs||[]);
   gpReplaceRows_(GP.SHEETS.BUDGETS,s.budgets||[]);
 }

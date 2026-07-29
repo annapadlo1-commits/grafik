@@ -36,7 +36,14 @@ function gpRunAllTests() {
     if(formulas.some(f=>!f||f.includes('&=')))throw new Error('Nieprawidłowa formuła kafelka');
   });
   run('Indeksy silnika',()=>{const ctx=gpBuildPlanningContext_(gpMonth_(new Date()),'ZRÓWNOWAŻONY',{});if(!ctx.availabilityIndex||!ctx.absenceIndex||!ctx.rules)throw new Error('Brak indeksów wydajności');});
-  run('Test wydajności optymalizatora',()=>{const ctx=gpBuildPlanningContext_(gpMonth_(new Date()),'ZRÓWNOWAŻONY',{}),start=Date.now();gpOptimize_(ctx);const ms=Date.now()-start;if(ms>45000)throw new Error(`Optymalizacja trwała ${ms} ms`);});
+  run('Profile planowania',()=>{
+    if(!gpRows_(GP.SHEETS.SCENARIOS).length)throw new Error('Brak scenariuszy');
+    if(!gpRows_(GP.SHEETS.MODES).length)throw new Error('Brak trybów optymalizacji');
+    if(!gpRows_(GP.SHEETS.LEVELS).length)throw new Error('Brak poziomów obsady');
+    gpRows_(GP.SHEETS.MODES).forEach(m=>{const sum=Number(m.WAGA_KOSZT_PROC||0)+Number(m.WAGA_PREFERENCJE_PROC||0)+Number(m.WAGA_SPRAWIEDLIWOŚĆ_PROC||0)+Number(m.WAGA_POKRYCIE_PROC||0)+Number(m.WAGA_CIĄGŁOŚĆ_PROC||0);if(sum!==100)throw new Error(`${m.TRYB_ID}: suma wag ${sum}%`);});
+  });
+  run('Niepusty wynik optymalizatora',()=>{const ctx=gpBuildPlanningContext_(gpMonth_(new Date()),'ZRÓWNOWAŻONY',{scenario:'BAZOWY',coverage:'OPTIMAL'});gpPreflight_(ctx);const result=gpOptimize_(ctx);if(!result.assignments.length)throw new Error('Silnik zwrócił 0 przydziałów');if(result.score<=0)throw new Error(`Silnik zwrócił wynik ${result.score}`);});
+  run('Test wydajności optymalizatora',()=>{const ctx=gpBuildPlanningContext_(gpMonth_(new Date()),'ZRÓWNOWAŻONY',{scenario:'BAZOWY',coverage:'OPTIMAL'}),start=Date.now();gpOptimize_(ctx);const ms=Date.now()-start;if(ms>45000)throw new Error(`Optymalizacja trwała ${ms} ms`);});
   gpReplaceRows_(GP.SHEETS.TESTS,results);
   const passed=results.filter(r=>r.STATUS==='PASS').length;
   return {ok:passed===results.length,passed,total:results.length,results};

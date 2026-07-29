@@ -63,5 +63,8 @@ function gpBootstrap(){
   const user=gpCurrentUser_(),month=gpMonth_(new Date());
   return {app:{name:GP.NAME,version:GP.VERSION},user,month,
     locations:gpRows_(GP.SHEETS.LOCATIONS),employees:gpRows_(GP.SHEETS.EMPLOYEES).map(e=>({ID:e.ID,name:e.IMIĘ_I_NAZWISKO})),
+    scenarios:gpRows_(GP.SHEETS.SCENARIOS).filter(r=>String(r.AKTYWNY).toUpperCase()!=='NIE'),
+    modes:gpRows_(GP.SHEETS.MODES).filter(r=>String(r.AKTYWNY).toUpperCase()!=='NIE'),
+    levels:gpRows_(GP.SHEETS.LEVELS).filter(r=>String(r.AKTYWNY).toUpperCase()!=='NIE'),
     plans:gpListPlans(month),health:gpHealthCheck()};
 }

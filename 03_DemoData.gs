@@ -23,7 +23,7 @@ function gpLoadDemo() {
       const loc = i % 5 === 0 ? 'LOC-CENTRUM' : i % 5 === 1 ? 'LOC-OGRODY' : 'LOC-CENTRUM,LOC-OGRODY';
       employees.push({ID:id, IMIĘ_I_NAZWISKO:`${firstNames[i%15]} ${lastNames[(i*7)%15]}`, EMAIL:email, TELEFON:`500${String(100000+i).slice(-6)}`, AKTYWNY:'TAK', DOMYŚLNA_LOKALIZACJA:i%2?'LOC-OGRODY':'LOC-CENTRUM', UMIEJĘTNOŚCI:i%8===0?'OBSŁUGA,LIDER':'OBSŁUGA', PRIORYTET:i%10===0?2:1});
       const full = i < 40;
-      contracts.push({PRACOWNIK_ID:id, TYP_UMOWY:full?'UMOWA O PRACĘ':'CZĘŚĆ ETATU', ETAT:full?1:0.5, GODZINY_MIESIĘCZNE:full?168:84, STAWKA_GODZINOWA:28+(i%8), KOSZT_PRACODAWCY_H:38+(i%9), OD:`${month}-01`, DO:'', TYLKO_RANO:i%11===0?'TAK':'NIE', DOZWOLONE_LOKALIZACJE:loc, MAX_DNI_Z_RZĘDU:i%13===0?4:6, MAX_H_TYDZIEŃ:full?48:32});
+      contracts.push({PRACOWNIK_ID:id, TYP_UMOWY:full?'UMOWA O PRACĘ':'CZĘŚĆ ETATU', ETAT:full?1:0.5, GODZINY_MIESIĘCZNE:full?168:84, STAWKA_GODZINOWA:28+(i%8), KOSZT_PRACODAWCY_H:38+(i%9), OD:`${month}-01`, DO:'', TYLKO_RANO:i%11===0?'TAK':'NIE', DOZWOLONE_LOKALIZACJE:loc, MAX_DNI_Z_RZĘDU:i%13===0?4:6, MAX_H_TYDZIEŃ:full?48:32,TYLKO_POPOŁUDNIE:'NIE',BEZ_WEEKENDÓW:i%17===0?'TAK':'NIE',DOSTĘPNY_STANDBY:i%7===0?'NIE':'TAK',MIN_ODPOCZYNEK_H:11});
       users.push({EMAIL:email, ROLA:GP.ROLES.EMPLOYEE, PRACOWNIK_ID:id, LOKALIZACJE:loc, AKTYWNY:'TAK'});
     }
     users.push({EMAIL:'admin@demo.pl', ROLA:GP.ROLES.ADMIN, PRACOWNIK_ID:'', LOKALIZACJE:'LOC-CENTRUM,LOC-OGRODY', AKTYWNY:'TAK'});
