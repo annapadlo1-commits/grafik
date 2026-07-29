@@ -2,7 +2,9 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('GRAFIK PRO')
     .addItem('Otwórz aplikację NA PEŁNYM EKRANIE', 'gpOpenFullApp')
     .addItem('Panel szybkich działań', 'gpOpenQuickPanel')
+    .addItem('Ustaw adres aplikacji pełnoekranowej', 'gpConfigureWebAppUrl')
     .addSeparator()
+    .addItem('Napraw panel i połączenie', 'gpRepairPanelAndConnection')
     .addItem('Instaluj / napraw strukturę', 'gpInstall')
     .addItem('Załaduj pełne dane DEMO', 'gpLoadDemo')
     .addItem('Synchronizuj trzy centrale', 'gpSyncCentrals')
@@ -44,6 +46,7 @@ function gpSeedCentralConfig_() {
   const rows=[
     ['USTAWIENIA_FILE_ID','','ID pliku GRAFIK PRO — USTAWIENIA I BAZA','NIEPOŁĄCZONO'],
     ['HR_FINANSE_FILE_ID','','ID pliku GRAFIK PRO — HR I FINANSE','NIEPOŁĄCZONO'],
+    ['WEB_APP_URL','','Aktualny adres wdrożonej aplikacji zakończony /exec','NIEUSTAWIONY'],
     ['OSTATNIA_SYNCHRONIZACJA','','Data ostatniego poprawnego odświeżenia','OCZEKUJE'],
     ['WERSJA_SNAPSHOTU','','Wersja lokalnej kopii danych','OCZEKUJE']
   ];
@@ -87,10 +90,10 @@ function gpCreateDashboard_() {
   sh.getRange('A4:H4').merge().setValue('CENTRUM PLANOWANIA • BUDŻET • ZASTĘPSTWA • ANALITYKA')
     .setBackground('#dbeafe').setFontColor('#1e3a8a').setFontWeight('bold').setHorizontalAlignment('center');
   const cards = [
-    ['A6:B8', 'PRACOWNICY', `=COUNTA('${GP.SHEETS.EMPLOYEES}'!A2:A)`],
-    ['C6:D8', 'AKTYWNY PLAN', `=COUNTIF('${GP.SHEETS.PLANS}'!F2:F;"${GP.PLAN_STATUS.PUBLISHED}")`],
-    ['E6:F8', 'ZMIANY', `=COUNTA('${GP.SHEETS.ASSIGNMENTS}'!A2:A)`],
-    ['G6:H8', 'ALERTY', `=COUNTIF('${GP.SHEETS.KPI}'!E2:E;"ALERT")`]
+    ['A6:B8', 'PRACOWNICY', `COUNTA('${GP.SHEETS.EMPLOYEES}'!A2:A)`],
+    ['C6:D8', 'AKTYWNY PLAN', `COUNTIF('${GP.SHEETS.PLANS}'!F2:F,"${GP.PLAN_STATUS.PUBLISHED}")`],
+    ['E6:F8', 'ZMIANY', `COUNTA('${GP.SHEETS.ASSIGNMENTS}'!A2:A)`],
+    ['G6:H8', 'ALERTY', `COUNTIF('${GP.SHEETS.KPI}'!E2:E,"ALERT")`]
   ];
   cards.forEach(c => {
     sh.getRange(c[0]).merge().setFormula(`="${c[1]}: "&${c[2]}`)
@@ -103,4 +106,17 @@ function gpCreateDashboard_() {
   sh.setColumnWidths(1, 8, 130);
   sh.setRowHeights(1, 15, 32);
   sh.setHiddenGridlines(true);
+}
+
+function gpRepairPanelAndConnection(){
+  gpCreateDashboard_();
+  PropertiesService.getDocumentProperties().setProperty('GP_VERSION',GP.VERSION);
+  SpreadsheetApp.flush();
+  const url=gpGetConfiguredWebAppUrl_();
+  SpreadsheetApp.getActive().toast(
+    url?'Panel naprawiony. Adres aplikacji jest ustawiony.':'Panel naprawiony. Teraz ustaw aktualny adres aplikacji.',
+    'GRAFIK PRO 2.1.2',8
+  );
+  if(!url)gpConfigureWebAppUrl();
+  return {ok:true,version:GP.VERSION,urlConfigured:!!url};
 }

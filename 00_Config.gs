@@ -1,5 +1,5 @@
 const GP = Object.freeze({
-  VERSION: '2.1.1-DEMO-PERFORMANCE',
+  VERSION: '2.1.2-DEMO-PANEL-FIX',
   NAME: 'GRAFIK PRO DEMO 2.1',
   TZ: 'Europe/Warsaw',
   LOCALE: 'pl_PL',
