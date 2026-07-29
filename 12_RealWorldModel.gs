@@ -106,6 +106,7 @@ function gpLoadDemo(){
   return gpLock_(()=>{
     const month=gpMonth_(new Date());
     const demo=gpBuildRealEmployees_(month);
+    gpResetDemoTransactions_();
     gpReplaceRows_(GP.SHEETS.LOCATIONS,[
       {ID:'KRUCZA',NAZWA:'KRUCZA',ADRES:'Warszawa — Krucza',AKTYWNA:'TAK',KIEROWNIK_EMAIL:'',KOLOR:'#2563eb'},
       {ID:'PAWILONY',NAZWA:'PAWILONY',ADRES:'Warszawa — Pawilony',AKTYWNA:'TAK',KIEROWNIK_EMAIL:'',KOLOR:'#7c3aed'}
@@ -134,6 +135,20 @@ function gpLoadDemo(){
     gpAudit_('LOAD_DEMO','SYSTEM',month,null,{employees:demo.employees.length,model:'REAL_WORLD'});
     return {ok:true,month,employees:demo.employees.length,message:'Pełne dane demonstracyjne KRUCZA + PAWILONY zostały załadowane.'};
   });
+}
+
+function gpResetDemoTransactions_(){
+  [
+    GP.SHEETS.PLANS,
+    GP.SHEETS.ASSIGNMENTS,
+    GP.SHEETS.VERSIONS,
+    GP.SHEETS.KPI,
+    GP.SHEETS.ROLE_PLANS,
+    GP.SHEETS.EMERGENCY,
+    GP.SHEETS.SWAPS,
+    GP.SHEETS.NOTIFICATIONS,
+    GP.SHEETS.TESTS
+  ].forEach(name=>gpReplaceRows_(name,[]));
 }
 
 function gpBuildRealEmployees_(month){
@@ -191,6 +206,10 @@ function gpGenerateRealDemand_(month){
 }
 
 function gpGeneratePlan(request){
+  return gpLock_(()=>gpGeneratePlanCore_(request));
+}
+
+function gpGeneratePlanCore_(request){
   gpRequireRole_([GP.ROLES.ADMIN,GP.ROLES.MANAGER]);
   request=request||{};
   const started=Date.now(),month=gpMonth_(request.month||new Date()),planId=gpId_('PLAN');
@@ -201,13 +220,35 @@ function gpGeneratePlan(request){
     TRYB:ctx.mode.TRYB_ID,STATUS:GP.PLAN_STATUS.DRAFT,UTWORZYŁ:gpCurrentUser_().email,UTWORZONO:gpNow_(),WYNIK:result.score,KOSZT:result.cost,UWAGI:result.summary};
   gpAppend_(GP.SHEETS.PLANS,plan);
   const old=gpRows_(GP.SHEETS.ASSIGNMENTS).map(gpCleanRow_);
-  const created=result.assignments.map(a=>Object.assign({ID:gpId_('ASG'),PLAN_ID:planId,STATUS:GP.ASSIGNMENT_STATUS.PLANNED},a));
+  const assignmentBatch=Utilities.getUuid().slice(0,8).toUpperCase();
+  const created=result.assignments.map((a,index)=>Object.assign({
+    ID:`ASG-${assignmentBatch}-${String(index+1).padStart(4,'0')}`,
+    PLAN_ID:planId,
+    STATUS:GP.ASSIGNMENT_STATUS.PLANNED
+  },a));
   gpReplaceRows_(GP.SHEETS.ASSIGNMENTS,old.concat(created));
   gpWriteKpis_(planId,result.kpis);gpSaveVersion_(planId,'Plan wygenerowany automatycznie');
   gpWriteRolePlans_(planId,created,result.gaps);
   gpRefreshDashboard_();
+  SpreadsheetApp.flush();
+  const savedPlan=gpRows_(GP.SHEETS.PLANS).find(p=>p.ID===planId);
+  const savedAssignments=gpRows_(GP.SHEETS.ASSIGNMENTS).filter(a=>a.PLAN_ID===planId);
+  if(!savedPlan||savedAssignments.length!==created.length){
+    throw new Error(`Plan nie został zapisany w całości (${savedAssignments.length}/${created.length} przydziałów). Nie pokazuję fałszywego komunikatu sukcesu.`);
+  }
   gpAudit_('GENERATE','PLAN',planId,null,{assignments:created.length,gaps:result.gaps.length});
-  return {ok:true,plan,result,timings:{totalMs:Date.now()-started}};
+  return {ok:true,plan:savedPlan,result:{assignments:savedAssignments,gaps:result.gaps,kpis:result.kpis,summary:result.summary},persisted:true,timings:{totalMs:Date.now()-started}};
+}
+
+function gpGetCalendarPlan(month,planId){
+  month=gpMonth_(month||new Date());
+  const plans=gpListPlans(month);
+  const selected=planId?plans.find(p=>p.ID===planId):(plans.find(p=>p.STATUS===GP.PLAN_STATUS.PUBLISHED)||plans[0]);
+  if(!selected)return {month,empty:true,plans:[]};
+  const assignments=gpRows_(GP.SHEETS.ASSIGNMENTS).filter(a=>a.PLAN_ID===selected.ID&&a.STATUS!==GP.ASSIGNMENT_STATUS.CANCELLED);
+  if(!assignments.length)return {month,empty:true,plans,reason:'Plan istnieje, ale nie zawiera zapisanych przydziałów.',plan:selected};
+  return {month,empty:false,plans,plan:selected,assignments,
+    rolePlans:gpRows_(GP.SHEETS.ROLE_PLANS).filter(r=>r.PLAN_ID===selected.ID)};
 }
 
 function gpBuildRealContext_(month,request){
@@ -389,9 +430,10 @@ function gpQueueEmergencyNotification_(emp,asg,emergency){
 function gpRefreshDashboard_(){
   const sh=gpSs_().getSheetByName('PANEL');if(!sh)return {ok:false};
   const employees=gpRows_(GP.SHEETS.EMPLOYEES).filter(e=>gpYes_(e.AKTYWNY)).length;
-  const plans=gpRows_(GP.SHEETS.PLANS),published=plans.filter(p=>p.STATUS===GP.PLAN_STATUS.PUBLISHED).length;
-  const assignments=gpRows_(GP.SHEETS.ASSIGNMENTS).filter(a=>a.STATUS!==GP.ASSIGNMENT_STATUS.CANCELLED).length;
-  const alerts=gpRows_(GP.SHEETS.KPI).filter(k=>String(k.STATUS).toUpperCase()==='ALERT').length+gpRows_(GP.SHEETS.ROLE_PLANS).reduce((s,r)=>s+Number(r.BRAKI||0),0);
+  const plans=gpRows_(GP.SHEETS.PLANS),planIds=new Set(plans.map(p=>p.ID)),published=plans.filter(p=>p.STATUS===GP.PLAN_STATUS.PUBLISHED).length;
+  const assignments=gpRows_(GP.SHEETS.ASSIGNMENTS).filter(a=>planIds.has(a.PLAN_ID)&&a.STATUS!==GP.ASSIGNMENT_STATUS.CANCELLED).length;
+  const alerts=gpRows_(GP.SHEETS.KPI).filter(k=>planIds.has(k.PLAN_ID)&&String(k.STATUS).toUpperCase()==='ALERT').length+
+    gpRows_(GP.SHEETS.ROLE_PLANS).filter(r=>planIds.has(r.PLAN_ID)).reduce((s,r)=>s+Number(r.BRAKI||0),0);
   [['A6:B8',`PRACOWNICY: ${employees}`],['C6:D8',`AKTYWNY PLAN: ${published}`],['E6:F8',`PRZYDZIAŁY: ${assignments}`],['G6:H8',`ALERTY: ${alerts}`]].forEach(x=>sh.getRange(x[0]).setValue(x[1]));
   return {ok:true,employees,published,assignments,alerts};
 }
@@ -400,7 +442,24 @@ function gpQuickStatus(){
   const d=gpRefreshDashboard_(),central=gpCentralStatus_();
   return {dashboard:d,lastSync:central.lastSync||'',pendingNotifications:gpRows_(GP.SHEETS.NOTIFICATIONS).filter(n=>n.STATUS==='OCZEKUJE').length,
     pendingAbsences:gpRows_(GP.SHEETS.ABSENCES).filter(a=>a.STATUS==='OCZEKUJE').length,pendingSwaps:gpRows_(GP.SHEETS.SWAPS).filter(s=>s.STATUS==='OCZEKUJE').length,
-    roleGaps:gpRows_(GP.SHEETS.ROLE_PLANS).reduce((s,r)=>s+Number(r.BRAKI||0),0),health:gpHealthCheck()};
+    roleGaps:gpRows_(GP.SHEETS.ROLE_PLANS).reduce((s,r)=>s+Number(r.BRAKI||0),0),
+    health:{score:Number(PropertiesService.getDocumentProperties().getProperty('GP_LAST_HEALTH_SCORE')||0)}};
+}
+
+function gpRunQuickHealth(){
+  const tests=[],run=(name,fn)=>{try{fn();tests.push({name,status:'PASS'});}catch(e){tests.push({name,status:'FAIL',detail:e.message});}};
+  run('Wymagane arkusze',()=>{
+    [GP.SHEETS.EMPLOYEES,GP.SHEETS.LOCATIONS,GP.SHEETS.SHIFT_DEFINITIONS,GP.SHEETS.STAFFING_MATRIX,GP.SHEETS.DEMAND]
+      .forEach(name=>{if(!gpSs_().getSheetByName(name))throw new Error(`Brak ${name}`);});
+  });
+  run('Pracownicy',()=>{const rows=gpRows_(GP.SHEETS.EMPLOYEES);if(rows.length!==76)throw new Error(`Oczekiwano 76, jest ${rows.length}`);});
+  run('Lokalizacje',()=>{const ids=gpRows_(GP.SHEETS.LOCATIONS).map(x=>x.ID);['KRUCZA','PAWILONY'].forEach(id=>{if(!ids.includes(id))throw new Error(`Brak ${id}`);});});
+  run('Definicje zmian',()=>{if(gpRows_(GP.SHEETS.SHIFT_DEFINITIONS).length!==31)throw new Error('Niepełne definicje zmian');});
+  run('Macierz obsady',()=>{if(gpRows_(GP.SHEETS.STAFFING_MATRIX).length!==32)throw new Error('Niepełna macierz obsady');});
+  run('Panel bez formuł',()=>{const sh=gpSs_().getSheetByName('PANEL');if(!sh)throw new Error('Brak PANEL');if(['A6','C6','E6','G6'].some(a=>!!sh.getRange(a).getFormula()))throw new Error('Panel nadal zawiera formuły');});
+  const passed=tests.filter(x=>x.status==='PASS').length,score=Math.round(passed/Math.max(1,tests.length)*100);
+  PropertiesService.getDocumentProperties().setProperty('GP_LAST_HEALTH_SCORE',String(score));
+  return {ok:passed===tests.length,passed,total:tests.length,score,tests};
 }
 
 function gpRunAllTests(){
@@ -416,7 +475,9 @@ function gpRunAllTests(){
   run('Macierz obsady',()=>{if(gpRows_(GP.SHEETS.STAFFING_MATRIX).length<25)throw new Error('Niepełna macierz');});
   run('Zapotrzebowanie rolowe',()=>{const d=gpRows_(GP.SHEETS.DEMAND);if(!d.length||d.some(x=>!x.ROLA))throw new Error('Brak popytu rolowego');});
   run('Próba optymalizacji',()=>{const ctx=gpBuildRealContext_(gpMonth_(new Date()),{scenario:'BAZOWY',coverage:'OPTIMAL'}),r=gpOptimizeReal_(ctx);if(!r.assignments.length||r.score<=0)throw new Error(`Wynik ${r.score}, przydziały ${r.assignments.length}`);});
-  gpReplaceRows_(GP.SHEETS.TESTS,results);const passed=results.filter(x=>x.STATUS==='PASS').length;return {ok:passed===results.length,passed,total:results.length,results};
+  gpReplaceRows_(GP.SHEETS.TESTS,results);const passed=results.filter(x=>x.STATUS==='PASS').length,score=Math.round(passed/Math.max(1,results.length)*100);
+  PropertiesService.getDocumentProperties().setProperty('GP_LAST_HEALTH_SCORE',String(score));
+  return {ok:passed===results.length,passed,total:results.length,score,results};
 }
 
 function gpDayCode_(d){return ['ND','PON','WT','ŚR','CZW','PT','SOB'][d.getDay()];}

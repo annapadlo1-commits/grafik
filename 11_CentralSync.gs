@@ -61,6 +61,15 @@ function gpReadExternal_(ss,name){
 
 function gpValidateCentralPayload_(db,locations,costs,budgets){
   const errors=[],warnings=[],ids=new Set(),locIds=new Set(locations.map(l=>l['LOKALIZACJA_ID*']));
+  const legacyLocations=['LOC-CENTRUM','LOC-OGRODY'].some(id=>locIds.has(id));
+  const realWorldLocations=['KRUCZA','PAWILONY'].every(id=>locIds.has(id));
+  if(legacyLocations&&!realWorldLocations){
+    return {
+      ok:false,
+      errors:['Plik USTAWIENIA korzysta jeszcze ze starego słownika lokalizacji LOC-CENTRUM / LOC-OGRODY. Zainstaluj poprawkę USTAWIENIA 2.3.1, uruchom naprawę struktury i ponownie załaduj dane DEMO przed synchronizacją.'],
+      warnings:[]
+    };
+  }
   db.forEach((r,i)=>{
     const id=r['PRACOWNIK_ID*'];if(!id)errors.push(`Baza wiersz ${i+2}: brak ID`);
     if(ids.has(id))errors.push(`Duplikat pracownika ${id}`);ids.add(id);

@@ -26,14 +26,18 @@ function gpOpenQuickPanel(){
   <button class="danger" onclick="openApp('calendar')">⚠ Awaryjnie dopisz pracownika</button>
   <button onclick="openApp('calendar')">⌕ Znajdź zastępstwo i braki</button>
   <button onclick="openApp('mobile')">✉ Wnioski, zamiany i powiadomienia</button>
-  <button onclick="run('gpRunAllTests')">✓ Application Health / testy</button>
+  <button onclick="runHealth()">✓ Application Health / szybkie testy</button>
   <p id="msg" class="muted"></p></div>
   <script>
   const appUrl=${JSON.stringify(url)};
   function openApp(view){if(!appUrl)return msg('Najpierw ustaw adres aplikacji.');window.open(appUrl+(appUrl.indexOf('?')>0?'&':'?')+'view='+view,'_blank')}
   function msg(x){document.getElementById('msg').textContent=x}
-  function run(name){msg('Przetwarzanie…');google.script.run.withSuccessHandler(x=>{msg('Gotowe');load()}).withFailureHandler(e=>msg(e.message||e))[name]()}
-  function load(){google.script.run.withSuccessHandler(s=>{document.getElementById('status').innerHTML='<b>Status operacyjny</b><br>Pracownicy: '+s.dashboard.employees+' • przydziały: '+s.dashboard.assignments+' • braki: '+s.roleGaps+'<br>Powiadomienia: '+s.pendingNotifications+' • urlopy: '+s.pendingAbsences+' • zamiany: '+s.pendingSwaps+'<br>Health: '+s.health.score+'%<br><span class="muted">Synchronizacja: '+(s.lastSync||'jeszcze nie wykonano')+'</span>'}).gpQuickStatus()}load();
+  let operationTimer=null;
+  function begin(label){clearTimeout(operationTimer);msg(label||'Przetwarzanie…');operationTimer=setTimeout(()=>msg('Operacja trwa zbyt długo. Zamknij panel, odśwież arkusz i spróbuj ponownie.'),30000)}
+  function finish(text){clearTimeout(operationTimer);msg(text)}
+  function run(name){begin('Przetwarzanie…');google.script.run.withSuccessHandler(x=>{finish('Gotowe');load()}).withFailureHandler(e=>finish(e.message||e))[name]()}
+  function runHealth(){begin('Sprawdzanie podstawowych elementów…');google.script.run.withSuccessHandler(r=>{finish('Szybkie testy: '+r.passed+'/'+r.total+' PASS • Health '+r.score+'%');load()}).withFailureHandler(e=>finish(e.message||e)).gpRunQuickHealth()}
+  function load(){google.script.run.withSuccessHandler(s=>{document.getElementById('status').innerHTML='<b>Status operacyjny</b><br>Pracownicy: '+s.dashboard.employees+' • przydziały: '+s.dashboard.assignments+' • braki: '+s.roleGaps+'<br>Powiadomienia: '+s.pendingNotifications+' • urlopy: '+s.pendingAbsences+' • zamiany: '+s.pendingSwaps+'<br>Health: '+s.health.score+'%<br><span class="muted">Synchronizacja: '+(s.lastSync||'jeszcze nie wykonano')+'</span>'}).withFailureHandler(e=>{document.getElementById('status').innerHTML='<b style="color:#991b1b">Nie można pobrać statusu</b><br><span class="muted">'+String(e.message||e)+'</span>';msg('Najpierw napraw i zsynchronizuj centrale.')}).gpQuickStatus()}load();
   </script>`;
   SpreadsheetApp.getUi().showSidebar(HtmlService.createHtmlOutput(html).setTitle('GRAFIK PRO — szybkie działania'));
 }
@@ -83,5 +87,6 @@ function gpBootstrap(){
     scenarios:gpRows_(GP.SHEETS.SCENARIOS).filter(r=>String(r.AKTYWNY).toUpperCase()!=='NIE'),
     modes:gpRows_(GP.SHEETS.MODES).filter(r=>String(r.AKTYWNY).toUpperCase()!=='NIE'),
     levels:gpRows_(GP.SHEETS.LEVELS).filter(r=>String(r.AKTYWNY).toUpperCase()!=='NIE'),
-    plans:gpListPlans(month),health:gpHealthCheck()};
+    plans:gpListPlans(month),
+    health:{score:Number(PropertiesService.getDocumentProperties().getProperty('GP_LAST_HEALTH_SCORE')||0)}};
 }
