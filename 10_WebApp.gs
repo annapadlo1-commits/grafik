@@ -21,7 +21,7 @@ function gpOpenQuickPanel(){
   <div style="padding:12px"><h3>GRAFIK PRO — szybkie działania</h3>${link}
   <div class="box" id="status">Ładowanie statusu…</div>
   <button onclick="run('gpSyncCentrals')">↻ Synchronizuj trzy centrale</button>
-  <button onclick="run('gpRefreshDashboard_')">◫ Odśwież panel arkusza</button>
+  <button onclick="run('gpRefreshDashboard')">◫ Odśwież panel arkusza</button>
   <button onclick="openApp('calendar')">＋ Event / wyjątek dnia</button>
   <button class="danger" onclick="openApp('calendar')">⚠ Awaryjnie dopisz pracownika</button>
   <button onclick="openApp('calendar')">⌕ Znajdź zastępstwo i braki</button>
@@ -37,7 +37,7 @@ function gpOpenQuickPanel(){
   function finish(text){clearTimeout(operationTimer);msg(text)}
   function run(name){begin('Przetwarzanie…');google.script.run.withSuccessHandler(x=>{finish('Gotowe');load()}).withFailureHandler(e=>finish(e.message||e))[name]()}
   function runHealth(){begin('Sprawdzanie podstawowych elementów…');google.script.run.withSuccessHandler(r=>{finish('Szybkie testy: '+r.passed+'/'+r.total+' PASS • Health '+r.score+'%');load()}).withFailureHandler(e=>finish(e.message||e)).gpRunQuickHealth()}
-  function load(){google.script.run.withSuccessHandler(s=>{document.getElementById('status').innerHTML='<b>Status operacyjny</b><br>Pracownicy: '+s.dashboard.employees+' • przydziały: '+s.dashboard.assignments+' • braki: '+s.roleGaps+'<br>Powiadomienia: '+s.pendingNotifications+' • urlopy: '+s.pendingAbsences+' • zamiany: '+s.pendingSwaps+'<br>Health: '+s.health.score+'%<br><span class="muted">Synchronizacja: '+(s.lastSync||'jeszcze nie wykonano')+'</span>'}).withFailureHandler(e=>{document.getElementById('status').innerHTML='<b style="color:#991b1b">Nie można pobrać statusu</b><br><span class="muted">'+String(e.message||e)+'</span>';msg('Najpierw napraw i zsynchronizuj centrale.')}).gpQuickStatus()}load();
+  function load(){const box=document.getElementById('status'),timer=setTimeout(()=>box.innerHTML='<b style="color:#991b1b">Status niedostępny</b><br><span class="muted">Zamknij panel i otwórz go ponownie.</span>',10000);google.script.run.withSuccessHandler(s=>{clearTimeout(timer);box.innerHTML='<b>Status operacyjny</b><br>Pracownicy: '+s.dashboard.employees+' • przydziały aktywnego planu: '+s.dashboard.assignments+' • alerty: '+s.roleGaps+'<br>Health: '+s.health.score+'%<br><span class="muted">Synchronizacja: '+(s.lastSync||'jeszcze nie wykonano')+'</span>'}).withFailureHandler(e=>{clearTimeout(timer);box.innerHTML='<b style="color:#991b1b">Nie można pobrać statusu</b><br><span class="muted">'+String(e.message||e)+'</span>';msg('Najpierw napraw i zsynchronizuj centrale.')}).gpQuickStatus()}load();
   </script>`;
   SpreadsheetApp.getUi().showSidebar(HtmlService.createHtmlOutput(html).setTitle('GRAFIK PRO — szybkie działania'));
 }

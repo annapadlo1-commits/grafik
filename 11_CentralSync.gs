@@ -25,6 +25,7 @@ function gpSyncCentrals(){
       gpApplySettingsSnapshot_(db,locations,shifts,rules,scenarios,modes,levels,shiftDefinitions,staffingMatrix,extraFunctions,calendar);
       gpApplyFinanceSnapshot_(costs,budgets);
       const stamp=gpNow_(),version=Utilities.getUuid().slice(0,8).toUpperCase();
+      PropertiesService.getDocumentProperties().setProperty('GP_LAST_SYNC',stamp);
       gpSetCentralStatus_('OSTATNIA_SYNCHRONIZACJA',stamp,'POŁĄCZONO');
       gpSetCentralStatus_('WERSJA_SNAPSHOTU',version,'GOTOWY');
       PropertiesService.getDocumentProperties().setProperty('GP_LAST_GOOD_CENTRAL_SYNC',JSON.stringify({version,stamp,employees:db.length}));

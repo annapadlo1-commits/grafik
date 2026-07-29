@@ -227,7 +227,7 @@ function gpGeneratePlanCore_(request){
     STATUS:GP.ASSIGNMENT_STATUS.PLANNED
   },a));
   gpReplaceRows_(GP.SHEETS.ASSIGNMENTS,old.concat(created));
-  gpWriteKpis_(planId,result.kpis);gpSaveVersion_(planId,'Plan wygenerowany automatycznie');
+  gpWriteKpis_(planId,result.kpis);
   gpWriteRolePlans_(planId,created,result.gaps);
   gpRefreshDashboard_();
   SpreadsheetApp.flush();
@@ -237,17 +237,21 @@ function gpGeneratePlanCore_(request){
     throw new Error(`Plan nie został zapisany w całości (${savedAssignments.length}/${created.length} przydziałów). Nie pokazuję fałszywego komunikatu sukcesu.`);
   }
   gpAudit_('GENERATE','PLAN',planId,null,{assignments:created.length,gaps:result.gaps.length});
-  return {ok:true,plan:savedPlan,result:{assignments:savedAssignments,gaps:result.gaps,kpis:result.kpis,summary:result.summary},persisted:true,timings:{totalMs:Date.now()-started}};
+  return {ok:true,plan:savedPlan,result:{assignmentCount:savedAssignments.length,gapCount:result.gaps.length,kpis:result.kpis,summary:result.summary},persisted:true,timings:{totalMs:Date.now()-started}};
 }
 
-function gpGetCalendarPlan(month,planId){
+function gpGetCalendarPlan(month,planId,offset,limit,role,location){
   month=gpMonth_(month||new Date());
   const plans=gpListPlans(month);
   const selected=planId?plans.find(p=>p.ID===planId):(plans.find(p=>p.STATUS===GP.PLAN_STATUS.PUBLISHED)||plans[0]);
   if(!selected)return {month,empty:true,plans:[]};
-  const assignments=gpRows_(GP.SHEETS.ASSIGNMENTS).filter(a=>a.PLAN_ID===selected.ID&&a.STATUS!==GP.ASSIGNMENT_STATUS.CANCELLED);
-  if(!assignments.length)return {month,empty:true,plans,reason:'Plan istnieje, ale nie zawiera zapisanych przydziałów.',plan:selected};
-  return {month,empty:false,plans,plan:selected,assignments,
+  offset=Math.max(0,Number(offset||0));limit=Math.min(250,Math.max(50,Number(limit||200)));
+  const all=gpRows_(GP.SHEETS.ASSIGNMENTS)
+    .filter(a=>a.PLAN_ID===selected.ID&&a.STATUS!==GP.ASSIGNMENT_STATUS.CANCELLED)
+    .filter(a=>(!role||a.ROLA===role)&&(!location||a.LOKALIZACJA_ID===location))
+    .sort((a,b)=>String(a.DATA).localeCompare(String(b.DATA))||String(a.LOKALIZACJA_ID).localeCompare(String(b.LOKALIZACJA_ID)));
+  if(!all.length)return {month,empty:true,plans,reason:'Plan istnieje, ale nie zawiera przydziałów dla wybranego filtra.',plan:selected};
+  return {month,empty:false,plans,plan:selected,assignments:all.slice(offset,offset+limit),offset,limit,total:all.length,
     rolePlans:gpRows_(GP.SHEETS.ROLE_PLANS).filter(r=>r.PLAN_ID===selected.ID)};
 }
 
@@ -289,13 +293,14 @@ function gpOptimizeReal_(ctx){
   let required=0;
   sorted.forEach(slot=>{
     const target=Math.max(Number(slot.MIN_OSÓB||0),Math.ceil(gpDemandBase_(slot,ctx.level)*Number(ctx.scenario.MNOŻNIK_ZAPOTRZEBOWANIA||1)));
+    const times=gpSlotTimes_(slot,ctx),hours=(times.end-times.start)/3600000;
     required+=target;
     const chosen=[];
     for(let n=0;n<target;n++){
       const needFunction=n===0?String(slot.FUNKCJA_WYMAGANA||''):'';
-      const candidates=ctx.employees.map(e=>gpRealCandidate_(e,slot,needFunction,ctx,state)).filter(x=>x.ok&&!chosen.some(c=>c.emp.ID===x.emp.ID)).sort((a,b)=>b.score-a.score);
+      const candidates=ctx.employees.map(e=>gpRealCandidate_(e,slot,needFunction,ctx,state,times,hours)).filter(x=>x.ok&&!chosen.some(c=>c.emp.ID===x.emp.ID)).sort((a,b)=>b.score-a.score);
       if(!candidates.length){gaps.push({DATA:gpDate_(slot.DATA),LOKALIZACJA_ID:slot.LOKALIZACJA_ID,ZMIANA_ID:slot.ZMIANA_ID,ROLA:slot.ROLA,FUNKCJA:needFunction||'',BRAK:1});continue;}
-      const c=candidates[0],times=gpSlotTimes_(slot,ctx),hours=(times.end-times.start)/3600000,cost=gpShiftCostReal_(c.emp.ID,hours,slot,ctx);
+      const c=candidates[0],cost=gpShiftCostReal_(c.emp.ID,hours,slot,ctx);
       const fn=needFunction||'';
       assignments.push({DATA:gpDate_(slot.DATA),LOKALIZACJA_ID:slot.LOKALIZACJA_ID,ZMIANA_ID:slot.ZMIANA_ID,OD:times.startText,DO:times.endText,DZIEŃ_PLUS:times.plus,
         PRACOWNIK_ID:c.emp.ID,ROLA:slot.ROLA,FUNKCJA:fn,KLASYFIKACJA:c.classification,STANDBY:'NIE',KOSZT:cost,ŹRÓDŁO:slot.ŹRÓDŁO||'SILNIK',UWAGI:c.note});
@@ -308,7 +313,7 @@ function gpOptimizeReal_(ctx){
     summary:`Pokrycie ${coverage}%, ${assignments.length} przydziałów, ${gaps.length} braków, w tym ${hard} braków wymaganych funkcji.`};
 }
 
-function gpRealCandidate_(emp,slot,needFunction,ctx,state){
+function gpRealCandidate_(emp,slot,needFunction,ctx,state,times,hours){
   if(emp.ROLA_GŁÓWNA!==slot.ROLA)return {emp,ok:false};
   if(needFunction&&!gpHasFunction_(emp,needFunction))return {emp,ok:false};
   if(!gpCanWorkLocation_(emp,slot.LOKALIZACJA_ID))return {emp,ok:false};
@@ -317,9 +322,10 @@ function gpRealCandidate_(emp,slot,needFunction,ctx,state){
   if(ctx.absences.some(a=>a.PRACOWNIK_ID===emp.ID&&String(a.STATUS).toUpperCase()!=='ODRZUCONA'&&date>=gpDate_(a.OD)&&date<=gpDate_(a.DO)))return {emp,ok:false};
   if(ctx.availability.some(a=>a.PRACOWNIK_ID===emp.ID&&gpDate_(a.DATA)===date&&String(a.STATUS).toUpperCase()==='NIEDOSTĘPNY'))return {emp,ok:false};
   if(gpYes_(contract.TYLKO_RANO)&&slot.ZMIANA_ID!=='RANO')return {emp,ok:false};
-  const times=gpSlotTimes_(slot,ctx),st=state[emp.ID],overlap=st.intervals.some(x=>times.start<x.end&&times.end>x.start);if(overlap)return {emp,ok:false};
+  times=times||gpSlotTimes_(slot,ctx);hours=hours===undefined?(times.end-times.start)/3600000:hours;
+  const st=state[emp.ID],overlap=st.intervals.some(x=>times.start<x.end&&times.end>x.start);if(overlap)return {emp,ok:false};
   if(st.intervals.length){const last=st.intervals[st.intervals.length-1],rest=(times.start-last.end)/3600000;if(rest>=0&&rest<Number(contract.MIN_ODPOCZYNEK_H||11))return {emp,ok:false};}
-  const week=gpWeekKey_(date),hours=(times.end-times.start)/3600000,max=Number(contract.MAX_H_TYDZIEŃ||48)+Number(ctx.scenario.MAX_NADGODZIN_H||0);
+  const week=gpWeekKey_(date),max=Number(contract.MAX_H_TYDZIEŃ||48)+Number(ctx.scenario.MAX_NADGODZIN_H||0);
   if(Number(st.weekly[week]||0)+hours>max)return {emp,ok:false};
   const target=Number(contract.GODZINY_MIESIĘCZNE||168),ratio=st.hours/Math.max(1,target);
   const home=emp.LOKALIZACJA_BAZOWA===slot.LOKALIZACJA_ID,classification=home?'ETAT_STANDARDOWY':gpYes_(emp[`${slot.LOKALIZACJA_ID}_STANDARD`])?'ETAT_STANDARDOWY':'NADGODZINY_INNY_LOKAL';
@@ -430,20 +436,35 @@ function gpQueueEmergencyNotification_(emp,asg,emergency){
 function gpRefreshDashboard_(){
   const sh=gpSs_().getSheetByName('PANEL');if(!sh)return {ok:false};
   const employees=gpRows_(GP.SHEETS.EMPLOYEES).filter(e=>gpYes_(e.AKTYWNY)).length;
-  const plans=gpRows_(GP.SHEETS.PLANS),planIds=new Set(plans.map(p=>p.ID)),published=plans.filter(p=>p.STATUS===GP.PLAN_STATUS.PUBLISHED).length;
-  const assignments=gpRows_(GP.SHEETS.ASSIGNMENTS).filter(a=>planIds.has(a.PLAN_ID)&&a.STATUS!==GP.ASSIGNMENT_STATUS.CANCELLED).length;
-  const alerts=gpRows_(GP.SHEETS.KPI).filter(k=>planIds.has(k.PLAN_ID)&&String(k.STATUS).toUpperCase()==='ALERT').length+
-    gpRows_(GP.SHEETS.ROLE_PLANS).filter(r=>planIds.has(r.PLAN_ID)).reduce((s,r)=>s+Number(r.BRAKI||0),0);
+  const plans=gpRows_(GP.SHEETS.PLANS),publishedPlans=plans.filter(p=>p.STATUS===GP.PLAN_STATUS.PUBLISHED),published=publishedPlans.length;
+  const selected=publishedPlans[publishedPlans.length-1]||plans[plans.length-1]||null,selectedId=selected?selected.ID:'';
+  const assignments=selectedId?gpRows_(GP.SHEETS.ASSIGNMENTS).filter(a=>a.PLAN_ID===selectedId&&a.STATUS!==GP.ASSIGNMENT_STATUS.CANCELLED).length:0;
+  const alerts=selectedId?gpRows_(GP.SHEETS.KPI).filter(k=>k.PLAN_ID===selectedId&&String(k.STATUS).toUpperCase()==='ALERT').length+
+    gpRows_(GP.SHEETS.ROLE_PLANS).filter(r=>r.PLAN_ID===selectedId).reduce((s,r)=>s+Number(r.BRAKI||0),0):0;
   [['A6:B8',`PRACOWNICY: ${employees}`],['C6:D8',`OPUBLIKOWANE: ${published}`],['E6:F8',`PRZYDZIAŁY: ${assignments}`],['G6:H8',`ALERTY: ${alerts}`]].forEach(x=>sh.getRange(x[0]).setValue(x[1]));
-  return {ok:true,employees,published,assignments,alerts};
+  const result={ok:true,employees,published,assignments,alerts,selectedPlanId:selectedId};
+  PropertiesService.getDocumentProperties().setProperty('GP_DASHBOARD_CACHE',JSON.stringify(result));
+  return result;
 }
 
+function gpRefreshDashboard(){return gpRefreshDashboard_();}
+
 function gpQuickStatus(){
-  const d=gpRefreshDashboard_(),central=gpCentralStatus_();
-  return {dashboard:d,lastSync:central.lastSync||'',pendingNotifications:gpRows_(GP.SHEETS.NOTIFICATIONS).filter(n=>n.STATUS==='OCZEKUJE').length,
-    pendingAbsences:gpRows_(GP.SHEETS.ABSENCES).filter(a=>a.STATUS==='OCZEKUJE').length,pendingSwaps:gpRows_(GP.SHEETS.SWAPS).filter(s=>s.STATUS==='OCZEKUJE').length,
-    roleGaps:gpRows_(GP.SHEETS.ROLE_PLANS).reduce((s,r)=>s+Number(r.BRAKI||0),0),
+  const raw=PropertiesService.getDocumentProperties().getProperty('GP_DASHBOARD_CACHE');
+  const d=raw?JSON.parse(raw):{ok:true,employees:0,published:0,assignments:0,alerts:0};
+  return {dashboard:d,lastSync:PropertiesService.getDocumentProperties().getProperty('GP_LAST_SYNC')||'',pendingNotifications:0,
+    pendingAbsences:0,pendingSwaps:0,roleGaps:Number(d.alerts||0),
     health:{score:Number(PropertiesService.getDocumentProperties().getProperty('GP_LAST_HEALTH_SCORE')||0)}};
+}
+
+function gpResetPlansForTesting(){
+  gpRequireRole_([GP.ROLES.ADMIN,GP.ROLES.MANAGER]);
+  return gpLock_(()=>{
+    gpResetDemoTransactions_();
+    const status=gpRefreshDashboard_();
+    SpreadsheetApp.getActive().toast('Usunięto testowe plany i przydziały.','GRAFIK PRO',6);
+    return {ok:true,status};
+  });
 }
 
 function gpRunQuickHealth(){

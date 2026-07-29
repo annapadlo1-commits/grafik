@@ -8,6 +8,7 @@ function onOpen() {
     .addItem('Instaluj / napraw strukturę', 'gpInstall')
     .addItem('Załaduj pełne dane DEMO', 'gpLoadDemo')
     .addItem('Synchronizuj trzy centrale', 'gpSyncCentrals')
+    .addItem('Wyczyść plany testowe i przydziały', 'gpResetPlansForTesting')
     .addItem('Application Health / szybkie testy', 'gpRunQuickHealth')
     .addItem('Pełne testy techniczne (mogą potrwać)', 'gpRunAllTests')
     .addItem('Utwórz kopię bezpieczeństwa', 'gpCreateBackup')

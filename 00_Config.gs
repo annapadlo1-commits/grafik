@@ -1,6 +1,6 @@
 const GP = Object.freeze({
-  VERSION: '2.3.2-REAL-WORLD',
-  NAME: 'GRAFIK PRO DEMO 2.3.2',
+  VERSION: '2.3.4-REAL-WORLD',
+  NAME: 'GRAFIK PRO DEMO 2.3.4',
   TZ: 'Europe/Warsaw',
   LOCALE: 'pl_PL',
   SHEETS: {
