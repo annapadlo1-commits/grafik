@@ -209,6 +209,10 @@ function gpGeneratePlan(request){
   return gpLock_(()=>gpGeneratePlanCore_(request));
 }
 
+function gpGeneratePlanClient(request){
+  return JSON.stringify(gpGeneratePlan(request));
+}
+
 function gpGeneratePlanCore_(request){
   gpRequireRole_([GP.ROLES.ADMIN,GP.ROLES.MANAGER]);
   request=request||{};
@@ -255,6 +259,10 @@ function gpGetCalendarPlan(month,planId,offset,limit,role,location){
     rolePlans:gpRows_(GP.SHEETS.ROLE_PLANS).filter(r=>r.PLAN_ID===selected.ID)};
 }
 
+function gpGetCalendarPlanClient(month,planId,offset,limit,role,location){
+  return JSON.stringify(gpGetCalendarPlan(month,planId,offset,limit,role,location));
+}
+
 function gpConfirmGeneratedPlan(month,planId){
   month=gpMonth_(month||new Date());
   const plans=gpListPlans(month);
@@ -264,6 +272,10 @@ function gpConfirmGeneratedPlan(month,planId){
     .filter(a=>a.PLAN_ID===plan.ID&&a.STATUS!==GP.ASSIGNMENT_STATUS.CANCELLED).length;
   return {ok:assignmentCount>0,month,planId:plan.ID,assignmentCount,score:Number(plan.WYNIK||0),
     error:assignmentCount?'':'Plan istnieje, ale nie zawiera przydziałów.'};
+}
+
+function gpConfirmGeneratedPlanClient(month,planId){
+  return JSON.stringify(gpConfirmGeneratedPlan(month,planId));
 }
 
 function gpBuildRealContext_(month,request){
