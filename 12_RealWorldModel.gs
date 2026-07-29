@@ -290,7 +290,7 @@ function gpBuildRealContext_(month,request){
   const absenceByEmployee={};absences.forEach(a=>{(absenceByEmployee[a.PRACOWNIK_ID]||(absenceByEmployee[a.PRACOWNIK_ID]=[])).push(a);});
   const unavailable=new Set();availability.forEach(a=>{if(String(a.STATUS).toUpperCase()==='NIEDOSTĘPNY')unavailable.add(`${a.PRACOWNIK_ID}|${gpDate_(a.DATA)}`);});
   return {month,request,employees,demand,scenario,mode,level,events:gpRows_(GP.SHEETS.EVENTS),exceptions:gpRows_(GP.SHEETS.DAY_EXCEPTIONS),
-    absences,availability,budgets:gpRows_(GP.SHEETS.BUDGETS).filter(b=>String(b.MIESIĄC).slice(0,7)===month),
+    absences,availability,budgets:gpRows_(GP.SHEETS.BUDGETS).filter(b=>gpMonth_(b.MIESIĄC)===month),
     maps:{contract:Object.fromEntries(contracts.map(x=>[x.PRACOWNIK_ID,x])),shift:Object.fromEntries(shifts.map(x=>[x.ID,x])),
       absenceByEmployee,unavailable},definitions:defs,rules:gpConfig_()};
 }

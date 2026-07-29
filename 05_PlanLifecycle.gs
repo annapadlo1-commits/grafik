@@ -1,5 +1,6 @@
 function gpListPlans(month) {
-  const plans=gpRows_(GP.SHEETS.PLANS).filter(p=>!month||String(p.MIESIĄC).slice(0,7)===gpMonth_(month));
+  const expectedMonth=month?gpMonth_(month):'';
+  const plans=gpRows_(GP.SHEETS.PLANS).filter(p=>!expectedMonth||gpMonth_(p.MIESIĄC)===expectedMonth);
   return plans.sort((a,b)=>String(b.UTWORZONO).localeCompare(String(a.UTWORZONO)));
 }
 
@@ -20,7 +21,8 @@ function gpChangePlanStatus(planId,status,note) {
       const validation=gpValidatePlan_(planId);
       if(validation.errors.length) throw new Error(`Nie można opublikować: ${validation.errors.length} błędów blokujących.`);
       if(String(gpConfig_().AUTO_BACKUP).toUpperCase()==='TAK') gpCreateBackup(`Przed publikacją ${planId}`);
-      plans.filter(p=>p.MIESIĄC===plan.MIESIĄC&&p.ID!==planId&&p.STATUS===GP.PLAN_STATUS.PUBLISHED).forEach(p=>p.STATUS=GP.PLAN_STATUS.ARCHIVED);
+      const planMonth=gpMonth_(plan.MIESIĄC);
+      plans.filter(p=>gpMonth_(p.MIESIĄC)===planMonth&&p.ID!==planId&&p.STATUS===GP.PLAN_STATUS.PUBLISHED).forEach(p=>p.STATUS=GP.PLAN_STATUS.ARCHIVED);
     }
     plan.STATUS=status; plan.UWAGI=note||plan.UWAGI;
     gpReplaceRows_(GP.SHEETS.PLANS,plans);

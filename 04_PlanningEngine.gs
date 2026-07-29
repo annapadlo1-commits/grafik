@@ -44,7 +44,7 @@ function gpBuildPlanningContext_(month, mode, request) {
   const availability = gpRows_(GP.SHEETS.AVAILABILITY).filter(r => gpMonth_(r.DATA) === month);
   const absences = gpRows_(GP.SHEETS.ABSENCES);
   const events = gpRows_(GP.SHEETS.EVENTS);
-  const budgets = gpRows_(GP.SHEETS.BUDGETS).filter(r => String(r.MIESIĄC).slice(0,7) === month);
+  const budgets = gpRows_(GP.SHEETS.BUDGETS).filter(r => gpMonth_(r.MIESIĄC) === month);
   const scenarios=gpRows_(GP.SHEETS.SCENARIOS).filter(r=>String(r.AKTYWNY).toUpperCase()!=='NIE');
   const modes=gpRows_(GP.SHEETS.MODES).filter(r=>String(r.AKTYWNY).toUpperCase()!=='NIE');
   const levels=gpRows_(GP.SHEETS.LEVELS).filter(r=>String(r.AKTYWNY).toUpperCase()!=='NIE');
