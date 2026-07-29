@@ -28,6 +28,8 @@ function gpSyncCentrals(){
       PropertiesService.getDocumentProperties().setProperty('GP_LAST_SYNC',stamp);
       gpSetCentralStatus_('OSTATNIA_SYNCHRONIZACJA',stamp,'POŁĄCZONO');
       gpSetCentralStatus_('WERSJA_SNAPSHOTU',version,'GOTOWY');
+      gpSetCentralStatus_('USTAWIENIA_FILE_ID',cfg.USTAWIENIA_FILE_ID,'POŁĄCZONO');
+      gpSetCentralStatus_('HR_FINANSE_FILE_ID',cfg.HR_FINANSE_FILE_ID,'POŁĄCZONO');
       PropertiesService.getDocumentProperties().setProperty('GP_LAST_GOOD_CENTRAL_SYNC',JSON.stringify({version,stamp,employees:db.length}));
       gpAudit_('SYNC','CENTRALE',version,null,{employees:db.length,locations:locations.length,costs:costs.length,budgets:budgets.length});
       SpreadsheetApp.getActive().toast(`Synchronizacja zakończona: ${db.length} pracowników.`,'GRAFIK PRO',7);
@@ -35,6 +37,8 @@ function gpSyncCentrals(){
     }catch(e){
       gpRestoreLocalSnapshot_(before);
       gpSetCentralStatus_('OSTATNIA_SYNCHRONIZACJA',gpNow_(),'BŁĄD');
+      gpSetCentralStatus_('USTAWIENIA_FILE_ID',cfg.USTAWIENIA_FILE_ID,'BŁĄD POŁĄCZENIA');
+      gpSetCentralStatus_('HR_FINANSE_FILE_ID',cfg.HR_FINANSE_FILE_ID,'BŁĄD POŁĄCZENIA');
       gpAudit_('SYNC_FAIL','CENTRALE','',null,{error:e.message});
       throw e;
     }

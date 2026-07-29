@@ -255,6 +255,17 @@ function gpGetCalendarPlan(month,planId,offset,limit,role,location){
     rolePlans:gpRows_(GP.SHEETS.ROLE_PLANS).filter(r=>r.PLAN_ID===selected.ID)};
 }
 
+function gpConfirmGeneratedPlan(month,planId){
+  month=gpMonth_(month||new Date());
+  const plans=gpListPlans(month);
+  const plan=(planId&&plans.find(p=>p.ID===planId))||plans[0];
+  if(!plan)return {ok:false,month,error:'Nie znaleziono zapisanego planu dla wybranego miesiąca.'};
+  const assignmentCount=gpRows_(GP.SHEETS.ASSIGNMENTS)
+    .filter(a=>a.PLAN_ID===plan.ID&&a.STATUS!==GP.ASSIGNMENT_STATUS.CANCELLED).length;
+  return {ok:assignmentCount>0,month,planId:plan.ID,assignmentCount,score:Number(plan.WYNIK||0),
+    error:assignmentCount?'':'Plan istnieje, ale nie zawiera przydziałów.'};
+}
+
 function gpBuildRealContext_(month,request){
   const employees=gpRows_(GP.SHEETS.EMPLOYEES).filter(e=>gpYes_(e.AKTYWNY));
   const contracts=gpRows_(GP.SHEETS.CONTRACTS),shifts=gpRows_(GP.SHEETS.SHIFT_TYPES),defs=gpRows_(GP.SHEETS.SHIFT_DEFINITIONS);
@@ -263,9 +274,13 @@ function gpBuildRealContext_(month,request){
   const scenario=scenarios.find(x=>x.SCENARIUSZ_ID===(request.scenario||'BAZOWY'))||scenarios[0];
   const mode=modes.find(x=>x.TRYB_ID===(request.mode||'ZRÓWNOWAŻONY'))||modes[0];
   const level=levels.find(x=>x.POZIOM_ID===(request.coverage||scenario.DOMYŚLNY_POZIOM_OBSADY||'OPTIMAL'))||levels[0];
+  const absences=gpRows_(GP.SHEETS.ABSENCES),availability=gpRows_(GP.SHEETS.AVAILABILITY);
+  const absenceByEmployee={};absences.forEach(a=>{(absenceByEmployee[a.PRACOWNIK_ID]||(absenceByEmployee[a.PRACOWNIK_ID]=[])).push(a);});
+  const unavailable=new Set();availability.forEach(a=>{if(String(a.STATUS).toUpperCase()==='NIEDOSTĘPNY')unavailable.add(`${a.PRACOWNIK_ID}|${gpDate_(a.DATA)}`);});
   return {month,request,employees,demand,scenario,mode,level,events:gpRows_(GP.SHEETS.EVENTS),exceptions:gpRows_(GP.SHEETS.DAY_EXCEPTIONS),
-    absences:gpRows_(GP.SHEETS.ABSENCES),availability:gpRows_(GP.SHEETS.AVAILABILITY),budgets:gpRows_(GP.SHEETS.BUDGETS).filter(b=>String(b.MIESIĄC).slice(0,7)===month),
-    maps:{contract:Object.fromEntries(contracts.map(x=>[x.PRACOWNIK_ID,x])),shift:Object.fromEntries(shifts.map(x=>[x.ID,x]))},definitions:defs,rules:gpConfig_()};
+    absences,availability,budgets:gpRows_(GP.SHEETS.BUDGETS).filter(b=>String(b.MIESIĄC).slice(0,7)===month),
+    maps:{contract:Object.fromEntries(contracts.map(x=>[x.PRACOWNIK_ID,x])),shift:Object.fromEntries(shifts.map(x=>[x.ID,x])),
+      absenceByEmployee,unavailable},definitions:defs,rules:gpConfig_()};
 }
 
 function gpApplyCalendarChanges_(demand,month){
@@ -293,12 +308,12 @@ function gpOptimizeReal_(ctx){
   let required=0;
   sorted.forEach(slot=>{
     const target=Math.max(Number(slot.MIN_OSÓB||0),Math.ceil(gpDemandBase_(slot,ctx.level)*Number(ctx.scenario.MNOŻNIK_ZAPOTRZEBOWANIA||1)));
-    const times=gpSlotTimes_(slot,ctx),hours=(times.end-times.start)/3600000;
+    const times=gpSlotTimes_(slot,ctx),hours=(times.end-times.start)/3600000,date=gpDate_(slot.DATA),week=gpWeekKey_(date);
     required+=target;
     const chosen=[];
     for(let n=0;n<target;n++){
       const needFunction=n===0?String(slot.FUNKCJA_WYMAGANA||''):'';
-      const candidates=ctx.employees.map(e=>gpRealCandidate_(e,slot,needFunction,ctx,state,times,hours)).filter(x=>x.ok&&!chosen.some(c=>c.emp.ID===x.emp.ID)).sort((a,b)=>b.score-a.score);
+      const candidates=ctx.employees.map(e=>gpRealCandidate_(e,slot,needFunction,ctx,state,times,hours,date,week)).filter(x=>x.ok&&!chosen.some(c=>c.emp.ID===x.emp.ID)).sort((a,b)=>b.score-a.score);
       if(!candidates.length){gaps.push({DATA:gpDate_(slot.DATA),LOKALIZACJA_ID:slot.LOKALIZACJA_ID,ZMIANA_ID:slot.ZMIANA_ID,ROLA:slot.ROLA,FUNKCJA:needFunction||'',BRAK:1});continue;}
       const c=candidates[0],cost=gpShiftCostReal_(c.emp.ID,hours,slot,ctx);
       const fn=needFunction||'';
@@ -313,19 +328,21 @@ function gpOptimizeReal_(ctx){
     summary:`Pokrycie ${coverage}%, ${assignments.length} przydziałów, ${gaps.length} braków, w tym ${hard} braków wymaganych funkcji.`};
 }
 
-function gpRealCandidate_(emp,slot,needFunction,ctx,state,times,hours){
+function gpRealCandidate_(emp,slot,needFunction,ctx,state,times,hours,date,week){
   if(emp.ROLA_GŁÓWNA!==slot.ROLA)return {emp,ok:false};
   if(needFunction&&!gpHasFunction_(emp,needFunction))return {emp,ok:false};
   if(!gpCanWorkLocation_(emp,slot.LOKALIZACJA_ID))return {emp,ok:false};
   if(emp.ROLA_GŁÓWNA==='PREP'&&(slot.LOKALIZACJA_ID!=='KRUCZA'||slot.ZMIANA_ID!=='RANO'))return {emp,ok:false};
-  const date=gpDate_(slot.DATA),contract=ctx.maps.contract[emp.ID];if(!contract)return {emp,ok:false};
-  if(ctx.absences.some(a=>a.PRACOWNIK_ID===emp.ID&&String(a.STATUS).toUpperCase()!=='ODRZUCONA'&&date>=gpDate_(a.OD)&&date<=gpDate_(a.DO)))return {emp,ok:false};
-  if(ctx.availability.some(a=>a.PRACOWNIK_ID===emp.ID&&gpDate_(a.DATA)===date&&String(a.STATUS).toUpperCase()==='NIEDOSTĘPNY'))return {emp,ok:false};
+  date=date||gpDate_(slot.DATA);week=week||gpWeekKey_(date);
+  const contract=ctx.maps.contract[emp.ID];if(!contract)return {emp,ok:false};
+  const ownAbsences=ctx.maps.absenceByEmployee[emp.ID]||[];
+  if(ownAbsences.some(a=>String(a.STATUS).toUpperCase()!=='ODRZUCONA'&&date>=gpDate_(a.OD)&&date<=gpDate_(a.DO)))return {emp,ok:false};
+  if(ctx.maps.unavailable.has(`${emp.ID}|${date}`))return {emp,ok:false};
   if(gpYes_(contract.TYLKO_RANO)&&slot.ZMIANA_ID!=='RANO')return {emp,ok:false};
   times=times||gpSlotTimes_(slot,ctx);hours=hours===undefined?(times.end-times.start)/3600000:hours;
   const st=state[emp.ID],overlap=st.intervals.some(x=>times.start<x.end&&times.end>x.start);if(overlap)return {emp,ok:false};
   if(st.intervals.length){const last=st.intervals[st.intervals.length-1],rest=(times.start-last.end)/3600000;if(rest>=0&&rest<Number(contract.MIN_ODPOCZYNEK_H||11))return {emp,ok:false};}
-  const week=gpWeekKey_(date),max=Number(contract.MAX_H_TYDZIEŃ||48)+Number(ctx.scenario.MAX_NADGODZIN_H||0);
+  const max=Number(contract.MAX_H_TYDZIEŃ||48)+Number(ctx.scenario.MAX_NADGODZIN_H||0);
   if(Number(st.weekly[week]||0)+hours>max)return {emp,ok:false};
   const target=Number(contract.GODZINY_MIESIĘCZNE||168),ratio=st.hours/Math.max(1,target);
   const home=emp.LOKALIZACJA_BAZOWA===slot.LOKALIZACJA_ID,classification=home?'ETAT_STANDARDOWY':gpYes_(emp[`${slot.LOKALIZACJA_ID}_STANDARD`])?'ETAT_STANDARDOWY':'NADGODZINY_INNY_LOKAL';
