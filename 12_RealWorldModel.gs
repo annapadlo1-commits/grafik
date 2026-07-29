@@ -434,7 +434,7 @@ function gpRefreshDashboard_(){
   const assignments=gpRows_(GP.SHEETS.ASSIGNMENTS).filter(a=>planIds.has(a.PLAN_ID)&&a.STATUS!==GP.ASSIGNMENT_STATUS.CANCELLED).length;
   const alerts=gpRows_(GP.SHEETS.KPI).filter(k=>planIds.has(k.PLAN_ID)&&String(k.STATUS).toUpperCase()==='ALERT').length+
     gpRows_(GP.SHEETS.ROLE_PLANS).filter(r=>planIds.has(r.PLAN_ID)).reduce((s,r)=>s+Number(r.BRAKI||0),0);
-  [['A6:B8',`PRACOWNICY: ${employees}`],['C6:D8',`AKTYWNY PLAN: ${published}`],['E6:F8',`PRZYDZIAŁY: ${assignments}`],['G6:H8',`ALERTY: ${alerts}`]].forEach(x=>sh.getRange(x[0]).setValue(x[1]));
+  [['A6:B8',`PRACOWNICY: ${employees}`],['C6:D8',`OPUBLIKOWANE: ${published}`],['E6:F8',`PRZYDZIAŁY: ${assignments}`],['G6:H8',`ALERTY: ${alerts}`]].forEach(x=>sh.getRange(x[0]).setValue(x[1]));
   return {ok:true,employees,published,assignments,alerts};
 }
 

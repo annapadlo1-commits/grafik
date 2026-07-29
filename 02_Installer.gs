@@ -144,7 +144,7 @@ function gpRepairPanelAndConnection(){
   const url=gpGetConfiguredWebAppUrl_();
   SpreadsheetApp.getActive().toast(
     url?'Panel naprawiony. Adres aplikacji jest ustawiony.':'Panel naprawiony. Teraz ustaw aktualny adres aplikacji.',
-    'GRAFIK PRO 2.1.2',8
+    `GRAFIK PRO ${GP.VERSION}`,8
   );
   if(!url)gpConfigureWebAppUrl();
   return {ok:true,version:GP.VERSION,urlConfigured:!!url};

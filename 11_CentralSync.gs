@@ -56,7 +56,11 @@ function gpSetCentralStatus_(key,value,status){
 function gpReadExternal_(ss,name){
   const sh=ss.getSheetByName(name);if(!sh)throw new Error(`W pliku „${ss.getName()}” brakuje arkusza ${name}.`);
   const values=sh.getDataRange().getValues();if(values.length<2)return[];
-  const h=values.shift().map(String);return values.filter(r=>r.some(v=>v!=='')).map(r=>Object.fromEntries(h.map((x,i)=>[x,r[i]])));
+  const rawHeaders=values.shift().map(x=>String(x||'').trim());
+  let width=rawHeaders.length;while(width>0&&!rawHeaders[width-1])width--;
+  const h=rawHeaders.slice(0,width);
+  return values.map(r=>r.slice(0,width)).filter(r=>r.some(v=>v!==''))
+    .map(r=>Object.fromEntries(h.map((x,i)=>[x,r[i]])));
 }
 
 function gpValidateCentralPayload_(db,locations,costs,budgets){
@@ -72,7 +76,7 @@ function gpValidateCentralPayload_(db,locations,costs,budgets){
   }
   db.forEach((r,i)=>{
     const id=r['PRACOWNIK_ID*'];if(!id)errors.push(`Baza wiersz ${i+2}: brak ID`);
-    if(ids.has(id))errors.push(`Duplikat pracownika ${id}`);ids.add(id);
+    if(id&&ids.has(id))errors.push(`Duplikat pracownika ${id}`);if(id)ids.add(id);
     if(String(r.STATUS_REKORDU)==='BŁĄD'||String(r.STATUS_REKORDU)==='NIEKOMPLETNY')errors.push(`${id}: status ${r.STATUS_REKORDU}`);
     const base=r['LOKALIZACJA_BAZOWA*'];if(base&&!locIds.has(base))errors.push(`${id}: nieznana lokalizacja bazowa ${base}`);
   });
