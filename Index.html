@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= gpInclude('Styles'); ?>
+</head>
+<body>
+  <div id="app">
+    <aside>
+      <div class="brand"><span class="logo">GP</span><div><b>GRAFIK PRO</b><small>DEMO 2.0</small></div></div>
+      <nav id="nav">
+        <button data-view="dashboard" class="active">◫ Centrum dowodzenia</button>
+        <button data-view="planner">✦ Generator grafiku</button>
+        <button data-view="calendar">▦ Grafik miesięczny</button>
+        <button data-view="scenarios">⑂ Scenariusze i wersje</button>
+        <button data-view="people">♙ Zespół i dostępność</button>
+        <button data-view="budget">◉ Budżet i koszty</button>
+        <button data-view="analytics">⌁ Analizy i prognozy</button>
+        <button data-view="mobile">⌕ Panel pracownika</button>
+        <button data-view="integrations">⇄ Kadromierz</button>
+        <button data-view="admin">⚙ Administracja</button>
+      </nav>
+      <div class="user" id="userCard">Ładowanie…</div>
+    </aside>
+    <main>
+      <header><div><h1 id="title">Centrum dowodzenia</h1><p id="subtitle">Plan, ludzie, ryzyko i koszty w jednym miejscu</p></div><div class="header-actions"><input id="month" type="month"><button class="secondary" onclick="refresh()">Odśwież</button><button onclick="openGenerator()">Nowy plan</button></div></header>
+      <section id="content"><div class="loader"><div></div><p>Uruchamiam GRAFIK PRO…</p></div></section>
+    </main>
+    <div id="toast"></div>
+  </div>
+  <?!= gpInclude('Scripts'); ?>
+</body>
+</html>

@@ -1,0 +1,115 @@
+const GP = Object.freeze({
+  VERSION: '2.0.0-DEMO',
+  NAME: 'GRAFIK PRO DEMO 2.0',
+  TZ: 'Europe/Warsaw',
+  LOCALE: 'pl_PL',
+  SHEETS: {
+    CONFIG: 'CONFIG',
+    USERS: 'UŻYTKOWNICY',
+    EMPLOYEES: 'PRACOWNICY',
+    CONTRACTS: 'ZATRUDNIENIE',
+    LOCATIONS: 'LOKALIZACJE',
+    SHIFT_TYPES: 'TYPY_ZMIAN',
+    DEMAND: 'ZAPOTRZEBOWANIE',
+    AVAILABILITY: 'DOSTĘPNOŚĆ',
+    ABSENCES: 'NIEOBECNOŚCI',
+    EVENTS: 'WYDARZENIA',
+    PLANS: 'PLANY',
+    ASSIGNMENTS: 'PRZYDZIAŁY',
+    VERSIONS: 'WERSJE_PLANU',
+    BUDGETS: 'BUDŻETY',
+    COSTS: 'KOSZTY_CHRONIONE',
+    SWAPS: 'ZAMIANY',
+    NOTIFICATIONS: 'POWIADOMIENIA',
+    AUDIT: 'AUDYT',
+    KPI: 'KPI',
+    IMPORT: 'IMPORT_KADROMIERZ',
+    EXPORT: 'EKSPORT_KADROMIERZ',
+    BACKUPS: 'KOPIE_ZAPASOWE',
+    TESTS: 'TESTY'
+  },
+  ROLES: {
+    ADMIN: 'ADMIN',
+    ACCOUNTING: 'KSIĘGOWOŚĆ',
+    MANAGER: 'KIEROWNIK',
+    EMPLOYEE: 'PRACOWNIK',
+    DEMO: 'DEMO'
+  },
+  PLAN_STATUS: {
+    DRAFT: 'ROBOCZY',
+    VALIDATED: 'ZWERYFIKOWANY',
+    PUBLISHED: 'OPUBLIKOWANY',
+    ARCHIVED: 'ARCHIWALNY'
+  },
+  ASSIGNMENT_STATUS: {
+    PLANNED: 'ZAPLANOWANA',
+    CONFIRMED: 'POTWIERDZONA',
+    SWAP_PENDING: 'ZAMIANA_OCZEKUJE',
+    CANCELLED: 'ANULOWANA'
+  },
+  DEFAULTS: {
+    MIN_REST_HOURS: 11,
+    MAX_CONSECUTIVE_DAYS: 6,
+    MAX_WEEKLY_HOURS: 48,
+    MINUTES_PER_SLOT: 15,
+    STANDBY_PER_LOCATION: 1,
+    FAIRNESS_WEIGHT: 22,
+    PREFERENCE_WEIGHT: 14,
+    COST_WEIGHT: 18,
+    CONTINUITY_WEIGHT: 8,
+    UNDERSTAFF_WEIGHT: 1000,
+    HARD_VIOLATION_WEIGHT: 100000
+  }
+});
+
+const GP_HEADERS = Object.freeze({
+  [GP.SHEETS.CONFIG]: ['KLUCZ', 'WARTOŚĆ', 'OPIS', 'EDYTOWALNE'],
+  [GP.SHEETS.USERS]: ['EMAIL', 'ROLA', 'PRACOWNIK_ID', 'LOKALIZACJE', 'AKTYWNY'],
+  [GP.SHEETS.EMPLOYEES]: ['ID', 'IMIĘ_I_NAZWISKO', 'EMAIL', 'TELEFON', 'AKTYWNY', 'DOMYŚLNA_LOKALIZACJA', 'UMIEJĘTNOŚCI', 'PRIORYTET'],
+  [GP.SHEETS.CONTRACTS]: ['PRACOWNIK_ID', 'TYP_UMOWY', 'ETAT', 'GODZINY_MIESIĘCZNE', 'STAWKA_GODZINOWA', 'KOSZT_PRACODAWCY_H', 'OD', 'DO', 'TYLKO_RANO', 'DOZWOLONE_LOKALIZACJE', 'MAX_DNI_Z_RZĘDU', 'MAX_H_TYDZIEŃ'],
+  [GP.SHEETS.LOCATIONS]: ['ID', 'NAZWA', 'ADRES', 'AKTYWNA', 'KIEROWNIK_EMAIL', 'KOLOR'],
+  [GP.SHEETS.SHIFT_TYPES]: ['ID', 'NAZWA', 'START', 'KONIEC', 'PŁATNE_H', 'TYP', 'KOLOR', 'WYMAGANE_UMIEJĘTNOŚCI'],
+  [GP.SHEETS.DEMAND]: ['DATA', 'LOKALIZACJA_ID', 'ZMIANA_ID', 'MIN_OSÓB', 'OPTYMALNIE_OSÓB', 'MAX_OSÓB', 'STANDBY', 'PRIORYTET', 'ŹRÓDŁO'],
+  [GP.SHEETS.AVAILABILITY]: ['PRACOWNIK_ID', 'DATA', 'OD', 'DO', 'STATUS', 'PREFERENCJA', 'LOKALIZACJA_ID', 'UWAGI'],
+  [GP.SHEETS.ABSENCES]: ['ID', 'PRACOWNIK_ID', 'OD', 'DO', 'TYP', 'STATUS', 'ŹRÓDŁO', 'UWAGI'],
+  [GP.SHEETS.EVENTS]: ['ID', 'NAZWA', 'OD', 'DO', 'LOKALIZACJA_ID', 'MNOŻNIK_ZAPOTRZEBOWANIA', 'DODATKOWE_OSOBY', 'UWAGI'],
+  [GP.SHEETS.PLANS]: ['ID', 'NAZWA', 'MIESIĄC', 'SCENARIUSZ', 'TRYB', 'STATUS', 'UTWORZYŁ', 'UTWORZONO', 'WYNIK', 'KOSZT', 'UWAGI'],
+  [GP.SHEETS.ASSIGNMENTS]: ['ID', 'PLAN_ID', 'DATA', 'LOKALIZACJA_ID', 'ZMIANA_ID', 'PRACOWNIK_ID', 'ROLA', 'STANDBY', 'STATUS', 'KOSZT', 'ŹRÓDŁO', 'UWAGI'],
+  [GP.SHEETS.VERSIONS]: ['ID', 'PLAN_ID', 'WERSJA', 'UTWORZYŁ', 'UTWORZONO', 'POWÓD', 'SNAPSHOT_JSON'],
+  [GP.SHEETS.BUDGETS]: ['MIESIĄC', 'LOKALIZACJA_ID', 'BUDŻET', 'LIMIT_H', 'OSTRZEŻENIE_PROC', 'AKTYWNY'],
+  [GP.SHEETS.COSTS]: ['PRACOWNIK_ID', 'MIESIĄC', 'STAWKA_H', 'DODATEK_NOCNY', 'DODATEK_WEEKEND', 'KOSZT_STAŁY', 'UWAGI'],
+  [GP.SHEETS.SWAPS]: ['ID', 'PRZYDZIAŁ_ID', 'OD_PRACOWNIKA_ID', 'DO_PRACOWNIKA_ID', 'STATUS', 'UTWORZONO', 'ZATWIERDZIŁ', 'UWAGI'],
+  [GP.SHEETS.NOTIFICATIONS]: ['ID', 'ODBIORCA', 'TYP', 'TYTUŁ', 'TREŚĆ', 'STATUS', 'UTWORZONO', 'WYSŁANO'],
+  [GP.SHEETS.AUDIT]: ['CZAS', 'UŻYTKOWNIK', 'AKCJA', 'ENCJA', 'ENCJA_ID', 'PRZED', 'PO', 'KORELACJA_ID'],
+  [GP.SHEETS.KPI]: ['PLAN_ID', 'METRYKA', 'WARTOŚĆ', 'CEL', 'STATUS', 'OPIS'],
+  [GP.SHEETS.IMPORT]: ['STATUS', 'TYP', 'WIERSZ_ŹRÓDŁOWY', 'PRACOWNIK', 'OD', 'DO', 'UWAGI'],
+  [GP.SHEETS.EXPORT]: ['PRACOWNIK', 'DATA', 'OD', 'DO', 'LOKALIZACJA', 'TYP_ZMIANY', 'UWAGI'],
+  [GP.SHEETS.BACKUPS]: ['ID', 'UTWORZONO', 'UTWORZYŁ', 'TYP', 'OPIS', 'PLIK_ID'],
+  [GP.SHEETS.TESTS]: ['CZAS', 'TEST', 'STATUS', 'SZCZEGÓŁY']
+});
+
+function gpSs_() {
+  const ss = SpreadsheetApp.getActive();
+  if (!ss) throw new Error('Aplikacja musi być powiązana z Arkuszem Google.');
+  return ss;
+}
+
+function gpId_(prefix) {
+  return `${prefix}-${Utilities.getUuid().slice(0, 8).toUpperCase()}`;
+}
+
+function gpNow_() {
+  return Utilities.formatDate(new Date(), GP.TZ, "yyyy-MM-dd'T'HH:mm:ss");
+}
+
+function gpMonth_(value) {
+  const d = value instanceof Date ? value : new Date(`${String(value).slice(0, 7)}-01T12:00:00`);
+  if (isNaN(d)) throw new Error('Nieprawidłowy miesiąc.');
+  return Utilities.formatDate(d, GP.TZ, 'yyyy-MM');
+}
+
+function gpDate_(value) {
+  const d = value instanceof Date ? value : new Date(value);
+  if (isNaN(d)) throw new Error(`Nieprawidłowa data: ${value}`);
+  return Utilities.formatDate(d, GP.TZ, 'yyyy-MM-dd');
+}
