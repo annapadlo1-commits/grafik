@@ -64,7 +64,7 @@ function gpRestoreVersion(versionId) {
   return gpGetPlan(version.PLAN_ID);
 }
 
-function gpValidatePlan_(planId) {
+function gpValidatePlanLegacy_(planId) {
   const asg=gpRows_(GP.SHEETS.ASSIGNMENTS).filter(a=>a.PLAN_ID===planId&&a.STATUS!==GP.ASSIGNMENT_STATUS.CANCELLED);
   const ctx=gpBuildPlanningContext_(gpRows_(GP.SHEETS.PLANS).find(p=>p.ID===planId).MIESIĄC,'ZRÓWNOWAŻONY',{});
   const errors=[],warnings=[];

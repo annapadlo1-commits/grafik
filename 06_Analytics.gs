@@ -7,7 +7,8 @@ function gpDashboardData(month, planId) {
   const shiftMap=Object.fromEntries(gpRows_(GP.SHEETS.SHIFT_TYPES).map(s=>[s.ID,s]));
   const byEmployee={};
   detail.assignments.forEach(a=>{
-    const h=Number((shiftMap[a.ZMIANA_ID]||{}).PŁATNE_H||0);
+    const start=a.OD?new Date(`2000-01-01T${a.OD}:00`):null,end=a.DO?new Date(`2000-01-${Number(a.DZIEŃ_PLUS||0)+1<10?'0':''}${Number(a.DZIEŃ_PLUS||0)+1}T${a.DO}:00`):null;
+    const h=start&&end?(end-start)/3600000:Number((shiftMap[a.ZMIANA_ID]||{}).PŁATNE_H||0);
     byEmployee[a.PRACOWNIK_ID]=byEmployee[a.PRACOWNIK_ID]||{hours:0,shifts:0,cost:0,standby:0};
     byEmployee[a.PRACOWNIK_ID].hours+=h;byEmployee[a.PRACOWNIK_ID].shifts++;byEmployee[a.PRACOWNIK_ID].cost+=Number(a.KOSZT||0);
     if(a.STANDBY==='TAK')byEmployee[a.PRACOWNIK_ID].standby++;

@@ -21,7 +21,7 @@ function gpHealthCheck() {
   return {ok:checks.every(c=>c.ok),score:gpRound_(checks.filter(c=>c.ok).length/checks.length*100),checks};
 }
 
-function gpRunAllTests() {
+function gpRunAllTestsLegacy_() {
   const results=[],run=(name,fn)=>{try{fn();results.push({CZAS:gpNow_(),TEST:name,STATUS:'PASS',SZCZEGÓŁY:'OK'});}catch(e){results.push({CZAS:gpNow_(),TEST:name,STATUS:'FAIL',SZCZEGÓŁY:e.message});}};
   run('Konfiguracja',()=>{if(!gpConfig_().APP_VERSION)throw new Error('Brak APP_VERSION');});
   run('Struktura',()=>{const h=gpHealthCheck();if(!h.ok)throw new Error(`Health ${h.score}%`);});

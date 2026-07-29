@@ -1,4 +1,4 @@
-function gpGeneratePlan(request) {
+function gpGeneratePlanLegacy_(request) {
   gpRequireRole_([GP.ROLES.ADMIN, GP.ROLES.MANAGER]);
   const started=Date.now(),timings={};
   request = request || {};

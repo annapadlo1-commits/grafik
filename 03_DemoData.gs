@@ -1,4 +1,4 @@
-function gpLoadDemo() {
+function gpLoadDemoLegacy_() {
   gpInstall();
   return gpLock_(() => {
     const useCentrals=gpCentralStatus_().connected;
@@ -70,7 +70,7 @@ function gpGenerateDemoAvailability_(month, employees) {
   const rows = [];
   employees.forEach((e, i) => {
     [5+(i%20), 14+(i%10)].forEach(day => rows.push({PRACOWNIK_ID:e.ID, DATA:`${month}-${String(day).padStart(2,'0')}`, OD:'00:00', DO:'23:59', STATUS:'NIEDOSTĘPNY', PREFERENCJA:'', LOKALIZACJA_ID:'', UWAGI:'Przykładowa niedostępność'}));
-    rows.push({PRACOWNIK_ID:e.ID, DATA:`${month}-${String(2+(i%25)).padStart(2,'0')}`, OD:i%3===0?'06:00':'14:00', DO:i%3===0?'14:00':'22:00', STATUS:'DOSTĘPNY', PREFERENCJA:'WYSOKA', LOKALIZACJA_ID:e.DOMYŚLNA_LOKALIZACJA, UWAGI:'Preferowana zmiana'});
+    rows.push({PRACOWNIK_ID:e.ID, DATA:`${month}-${String(2+(i%25)).padStart(2,'0')}`, OD:i%3===0?'10:00':'17:00', DO:i%3===0?'17:00':'23:59', STATUS:'DOSTĘPNY', PREFERENCJA:'WYSOKA', LOKALIZACJA_ID:e.LOKALIZACJA_BAZOWA||e.DOMYŚLNA_LOKALIZACJA, UWAGI:'Preferowana zmiana'});
   });
   gpReplaceRows_(GP.SHEETS.AVAILABILITY, rows);
 }

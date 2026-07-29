@@ -16,8 +16,25 @@ function gpOpenFullApp(){
 
 function gpOpenQuickPanel(){
   const url=gpGetConfiguredWebAppUrl_();
-  const link=url?`<a href="${gpEscapeHtml_(url)}" target="_blank" style="display:block;text-align:center;background:#2563eb;color:#fff;text-decoration:none;padding:11px;border-radius:8px;font-weight:bold">Pełna aplikacja</a>`:'<p style="color:#b91c1c"><b>Brak aktywnego adresu aplikacji.</b></p>';
-  const html=`<div style="font:13px Arial;padding:14px"><h3>GRAFIK PRO</h3>${link}<hr><p>Ostatnia synchronizacja:</p><b>${gpCentralStatus_().lastSync||'jeszcze nie wykonano'}</b><p>Pełny dashboard nie jest wyświetlany w panelu bocznym.</p></div>`;
+  const link=url?`<a href="${gpEscapeHtml_(url)}" target="_blank" style="display:block;text-align:center;background:#2563eb;color:#fff;text-decoration:none;padding:12px;border-radius:8px;font-weight:bold">OTWÓRZ PEŁNĄ APLIKACJĘ</a>`:'<p style="color:#b91c1c"><b>Brak aktywnego adresu aplikacji.</b></p>';
+  const html=`<style>body{font:13px Arial;color:#0f172a}button{width:100%;padding:10px;margin:4px 0;border:0;border-radius:7px;background:#e2e8f0;cursor:pointer;text-align:left}.primary{background:#2563eb;color:#fff;font-weight:bold}.danger{background:#fee2e2;color:#991b1b}.box{background:#f8fafc;padding:10px;border-radius:8px;margin:10px 0}.muted{color:#64748b;font-size:11px}</style>
+  <div style="padding:12px"><h3>GRAFIK PRO — szybkie działania</h3>${link}
+  <div class="box" id="status">Ładowanie statusu…</div>
+  <button onclick="run('gpSyncCentrals')">↻ Synchronizuj trzy centrale</button>
+  <button onclick="run('gpRefreshDashboard_')">◫ Odśwież panel arkusza</button>
+  <button onclick="openApp('calendar')">＋ Event / wyjątek dnia</button>
+  <button class="danger" onclick="openApp('calendar')">⚠ Awaryjnie dopisz pracownika</button>
+  <button onclick="openApp('calendar')">⌕ Znajdź zastępstwo i braki</button>
+  <button onclick="openApp('mobile')">✉ Wnioski, zamiany i powiadomienia</button>
+  <button onclick="run('gpRunAllTests')">✓ Application Health / testy</button>
+  <p id="msg" class="muted"></p></div>
+  <script>
+  const appUrl=${JSON.stringify(url)};
+  function openApp(view){if(!appUrl)return msg('Najpierw ustaw adres aplikacji.');window.open(appUrl+(appUrl.indexOf('?')>0?'&':'?')+'view='+view,'_blank')}
+  function msg(x){document.getElementById('msg').textContent=x}
+  function run(name){msg('Przetwarzanie…');google.script.run.withSuccessHandler(x=>{msg('Gotowe');load()}).withFailureHandler(e=>msg(e.message||e))[name]()}
+  function load(){google.script.run.withSuccessHandler(s=>{document.getElementById('status').innerHTML='<b>Status operacyjny</b><br>Pracownicy: '+s.dashboard.employees+' • przydziały: '+s.dashboard.assignments+' • braki: '+s.roleGaps+'<br>Powiadomienia: '+s.pendingNotifications+' • urlopy: '+s.pendingAbsences+' • zamiany: '+s.pendingSwaps+'<br>Health: '+s.health.score+'%<br><span class="muted">Synchronizacja: '+(s.lastSync||'jeszcze nie wykonano')+'</span>'}).gpQuickStatus()}load();
+  </script>`;
   SpreadsheetApp.getUi().showSidebar(HtmlService.createHtmlOutput(html).setTitle('GRAFIK PRO — szybkie działania'));
 }
 
@@ -62,7 +79,7 @@ function gpEscapeHtml_(value){
 function gpBootstrap(){
   const user=gpCurrentUser_(),month=gpMonth_(new Date());
   return {app:{name:GP.NAME,version:GP.VERSION},user,month,
-    locations:gpRows_(GP.SHEETS.LOCATIONS),employees:gpRows_(GP.SHEETS.EMPLOYEES).map(e=>({ID:e.ID,name:e.IMIĘ_I_NAZWISKO})),
+    locations:gpRows_(GP.SHEETS.LOCATIONS),employees:gpRows_(GP.SHEETS.EMPLOYEES).map(e=>({ID:e.ID,name:e.IMIĘ_I_NAZWISKO,role:e.ROLA_GŁÓWNA,location:e.LOKALIZACJA_BAZOWA})),
     scenarios:gpRows_(GP.SHEETS.SCENARIOS).filter(r=>String(r.AKTYWNY).toUpperCase()!=='NIE'),
     modes:gpRows_(GP.SHEETS.MODES).filter(r=>String(r.AKTYWNY).toUpperCase()!=='NIE'),
     levels:gpRows_(GP.SHEETS.LEVELS).filter(r=>String(r.AKTYWNY).toUpperCase()!=='NIE'),

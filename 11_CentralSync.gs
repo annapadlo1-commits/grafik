@@ -14,11 +14,15 @@ function gpSyncCentrals(){
       const scenarios=gpReadExternal_(settings,'SCENARIUSZE');
       const modes=gpReadExternal_(settings,'TRYBY_OPTYMALIZACJI');
       const levels=gpReadExternal_(settings,'POZIOMY_OBSADY');
+      const shiftDefinitions=gpReadExternal_(settings,'DEFINICJE_ZMIAN');
+      const staffingMatrix=gpReadExternal_(settings,'MACIERZ_OBSADY');
+      const extraFunctions=gpReadExternal_(settings,'FUNKCJE_DODATKOWE');
+      const calendar=gpReadExternal_(settings,'KALENDARZ_MODYFIKACJI');
       const costs=gpReadExternal_(finance,'KOSZTY_PRACOWNIKÓW');
       const budgets=gpReadExternal_(finance,'BUDŻETY_LOKALIZACJI');
       const validation=gpValidateCentralPayload_(db,locations,costs,budgets);
       if(!validation.ok)throw new Error(`Synchronizacja zablokowana: ${validation.errors.slice(0,8).join('; ')}`);
-      gpApplySettingsSnapshot_(db,locations,shifts,rules,scenarios,modes,levels);
+      gpApplySettingsSnapshot_(db,locations,shifts,rules,scenarios,modes,levels,shiftDefinitions,staffingMatrix,extraFunctions,calendar);
       gpApplyFinanceSnapshot_(costs,budgets);
       const stamp=gpNow_(),version=Utilities.getUuid().slice(0,8).toUpperCase();
       gpSetCentralStatus_('OSTATNIA_SYNCHRONIZACJA',stamp,'POŁĄCZONO');
@@ -61,20 +65,21 @@ function gpValidateCentralPayload_(db,locations,costs,budgets){
     const id=r['PRACOWNIK_ID*'];if(!id)errors.push(`Baza wiersz ${i+2}: brak ID`);
     if(ids.has(id))errors.push(`Duplikat pracownika ${id}`);ids.add(id);
     if(String(r.STATUS_REKORDU)==='BŁĄD'||String(r.STATUS_REKORDU)==='NIEKOMPLETNY')errors.push(`${id}: status ${r.STATUS_REKORDU}`);
-    String(r['DOZWOLONE_LOKALIZACJE*']||'').split(',').filter(Boolean).forEach(x=>{if(!locIds.has(x.trim()))errors.push(`${id}: nieznana lokalizacja ${x}`);});
+    const base=r['LOKALIZACJA_BAZOWA*'];if(base&&!locIds.has(base))errors.push(`${id}: nieznana lokalizacja bazowa ${base}`);
   });
   costs.forEach(r=>{if(!ids.has(r['PRACOWNIK_ID*']))warnings.push(`Koszt bez aktywnego pracownika: ${r['PRACOWNIK_ID*']}`);});
   budgets.forEach(r=>{if(!locIds.has(r['LOKALIZACJA_ID*']))errors.push(`Budżet nieznanej lokalizacji ${r['LOKALIZACJA_ID*']}`);});
   return {ok:errors.length===0,errors,warnings};
 }
 
-function gpApplySettingsSnapshot_(db,locations,shifts,rules,scenarios,modes,levels){
+function gpApplySettingsSnapshot_(db,locations,shifts,rules,scenarios,modes,levels,shiftDefinitions,staffingMatrix,extraFunctions,calendar){
   const employees=[],contracts=[],users=[];
   db.forEach(r=>{
     const id=r['PRACOWNIK_ID*'],active=String(r['AKTYWNY*']).toUpperCase()==='TAK'?'TAK':'NIE';
-    employees.push({ID:id,IMIĘ_I_NAZWISKO:r['IMIĘ_I_NAZWISKO*'],EMAIL:r['EMAIL*'],TELEFON:r.TELEFON,AKTYWNY:active,DOMYŚLNA_LOKALIZACJA:r['LOKALIZACJA_DOMYŚLNA*'],UMIEJĘTNOŚCI:r['KOMPETENCJE*'],PRIORYTET:r.PRIORYTET_PLANOWANIA});
-    contracts.push({PRACOWNIK_ID:id,TYP_UMOWY:r['TYP_UMOWY*'],ETAT:r['ETAT*'],GODZINY_MIESIĘCZNE:r['GODZINY_MIESIĘCZNE*'],STAWKA_GODZINOWA:'',KOSZT_PRACODAWCY_H:'',OD:r['DATA_ZATRUDNIENIA_OD*'],DO:r.DATA_ZATRUDNIENIA_DO,TYLKO_RANO:r.TYLKO_RANO,DOZWOLONE_LOKALIZACJE:r['DOZWOLONE_LOKALIZACJE*'],MAX_DNI_Z_RZĘDU:r.MAX_DNI_Z_RZĘDU,MAX_H_TYDZIEŃ:r.MAX_GODZIN_TYGODNIOWO,TYLKO_POPOŁUDNIE:r.TYLKO_POPOŁUDNIE,BEZ_WEEKENDÓW:r.BEZ_WEEKENDÓW,DOSTĘPNY_STANDBY:r.DOSTĘPNY_STANDBY,MIN_ODPOCZYNEK_H:r.MIN_ODPOCZYNEK_H});
-    users.push({EMAIL:r['EMAIL*'],ROLA:r['ROLA_APLIKACJI*']||GP.ROLES.EMPLOYEE,PRACOWNIK_ID:id,LOKALIZACJE:r['DOZWOLONE_LOKALIZACJE*'],AKTYWNY:active});
+    employees.push({ID:id,IMIĘ_I_NAZWISKO:r['IMIĘ_I_NAZWISKO*'],EMAIL:r['EMAIL*'],TELEFON:r.TELEFON,AKTYWNY:active,ROLA_GŁÓWNA:r['ROLA_GŁÓWNA*'],LOKALIZACJA_BAZOWA:r['LOKALIZACJA_BAZOWA*'],KRUCZA_STANDARD:r.KRUCZA_STANDARD,PAWILONY_STANDARD:r.PAWILONY_STANDARD,KRUCZA_NADGODZINY:r.KRUCZA_NADGODZINY,PAWILONY_NADGODZINY:r.PAWILONY_NADGODZINY,HOST:r.HOST,ZAMKNIĘCIE_BARU:r.ZAMKNIĘCIE_BARU,ZAMKNIĘCIE_SALI:r.ZAMKNIĘCIE_SALI,MENADŻER_ZESPOŁU:r.MENADŻER_ZESPOŁU,ZARZĄDZA_ROLĄ:r.ZARZĄDZA_ROLĄ,ZARZĄDZA_LOKALIZACJĄ:r.ZARZĄDZA_LOKALIZACJĄ,ROTACYJNY:r.ROTACYJNY,SPLIT_SHIFT:r.SPLIT_SHIFT,EVENT:r.EVENT,STANDBY:r.STANDBY,PRIORYTET:r.PRIORYTET_PLANOWANIA});
+    const allowed=[r.KRUCZA_STANDARD==='TAK'?'KRUCZA':'',r.PAWILONY_STANDARD==='TAK'?'PAWILONY':''].filter(Boolean).join(',');
+    contracts.push({PRACOWNIK_ID:id,TYP_UMOWY:r['TYP_UMOWY*'],ETAT:r['ETAT*'],GODZINY_MIESIĘCZNE:r['GODZINY_MIESIĘCZNE*'],STAWKA_GODZINOWA:'',KOSZT_PRACODAWCY_H:'',OD:r['DATA_ZATRUDNIENIA_OD*'],DO:r.DATA_ZATRUDNIENIA_DO,TYLKO_RANO:r.TYLKO_RANO,DOZWOLONE_LOKALIZACJE:allowed,MAX_DNI_Z_RZĘDU:r.MAX_DNI_Z_RZĘDU,MAX_H_TYDZIEŃ:r.MAX_GODZIN_TYGODNIOWO,TYLKO_POPOŁUDNIE:r.TYLKO_POPOŁUDNIE,BEZ_WEEKENDÓW:r.BEZ_WEEKENDÓW,DOSTĘPNY_STANDBY:r.STANDBY,MIN_ODPOCZYNEK_H:r.MIN_ODPOCZYNEK_H});
+    users.push({EMAIL:r['EMAIL*'],ROLA:r['ROLA_APLIKACJI*']||GP.ROLES.EMPLOYEE,PRACOWNIK_ID:id,LOKALIZACJE:allowed,AKTYWNY:active});
   });
   locations.forEach(r=>{}); // walidacja odbywa się przed zapisem
   gpReplaceRows_(GP.SHEETS.EMPLOYEES,employees);gpReplaceRows_(GP.SHEETS.CONTRACTS,contracts);gpReplaceRows_(GP.SHEETS.USERS,users);
@@ -86,6 +91,12 @@ function gpApplySettingsSnapshot_(db,locations,shifts,rules,scenarios,modes,leve
   gpReplaceRows_(GP.SHEETS.SCENARIOS,scenarios.map(r=>({SCENARIUSZ_ID:r['SCENARIUSZ_ID*'],NAZWA:r['NAZWA*'],MNOŻNIK_ZAPOTRZEBOWANIA:r['MNOŻNIK_ZAPOTRZEBOWANIA*'],MNOŻNIK_BUDŻETU:r['MNOŻNIK_BUDŻETU*'],DOMYŚLNY_POZIOM_OBSADY:r.DOMYŚLNY_POZIOM_OBSADY,NADGODZINY:r.NADGODZINY,MAX_NADGODZIN_H:r.MAX_NADGODZIN_H,REDUKCJA_DOSTĘPNOŚCI_PROC:r.REDUKCJA_DOSTĘPNOŚCI_PROC,ZATRUDNIENIE_CZASOWE:r.ZATRUDNIENIE_CZASOWE,AKTYWNY:r.AKTYWNY,OPIS:r.OPIS})));
   gpReplaceRows_(GP.SHEETS.MODES,modes.map(r=>({TRYB_ID:r['TRYB_ID*'],NAZWA:r['NAZWA*'],WAGA_KOSZT_PROC:r['WAGA_KOSZT_PROC*'],WAGA_PREFERENCJE_PROC:r['WAGA_PREFERENCJE_PROC*'],WAGA_SPRAWIEDLIWOŚĆ_PROC:r['WAGA_SPRAWIEDLIWOŚĆ_PROC*'],WAGA_POKRYCIE_PROC:r['WAGA_POKRYCIE_PROC*'],WAGA_CIĄGŁOŚĆ_PROC:r['WAGA_CIĄGŁOŚĆ_PROC*'],AKTYWNY:r.AKTYWNY,OPIS:r.OPIS})));
   gpReplaceRows_(GP.SHEETS.LEVELS,levels.map(r=>({POZIOM_ID:r['POZIOM_ID*'],NAZWA:r['NAZWA*'],ŹRÓDŁO_CELU:r['ŹRÓDŁO_CELU*'],MNOŻNIK:r['MNOŻNIK*'],LIMIT_BUDŻETU_PROC:r.LIMIT_BUDŻETU_PROC,AKTYWNY:r.AKTYWNY,OPIS:r.OPIS})));
+  gpReplaceRows_(GP.SHEETS.SHIFT_DEFINITIONS,shiftDefinitions||[]);
+  gpReplaceRows_(GP.SHEETS.STAFFING_MATRIX,staffingMatrix||[]);
+  gpReplaceRows_(GP.SHEETS.EXTRA_FUNCTIONS,extraFunctions||[]);
+  gpReplaceRows_(GP.SHEETS.DAY_EXCEPTIONS,(calendar||[]).map(r=>({ID:r.ID,DATA:r.DATA,LOKALIZACJA_ID:r.LOKALIZACJA_ID,TYP:r.TYP,ZMIANA_ID:r.ZMIANA_ID,ROLA:r.ROLA,WARTOŚĆ:r.WARTOŚĆ,START:r.START,KONIEC:r.KONIEC,DZIEŃ_PLUS:r.DZIEŃ_PLUS,NAZWA:r.NAZWA,UWAGI:r.UWAGI,AKTYWNY:r.AKTYWNY})));
+  gpGenerateRealDemand_(gpMonth_(new Date()));
+  gpRefreshDashboard_();
 }
 
 function gpApplyFinanceSnapshot_(costs,budgets){
@@ -98,7 +109,7 @@ function gpApplyFinanceSnapshot_(costs,budgets){
 
 function gpCreateLocalSnapshot_(){
   const clean=name=>gpRows_(name).map(r=>{const x=Object.assign({},r);delete x._row;return x;});
-  return {employees:clean(GP.SHEETS.EMPLOYEES),contracts:clean(GP.SHEETS.CONTRACTS),users:clean(GP.SHEETS.USERS),locations:clean(GP.SHEETS.LOCATIONS),shifts:clean(GP.SHEETS.SHIFT_TYPES),config:clean(GP.SHEETS.CONFIG),scenarios:clean(GP.SHEETS.SCENARIOS),modes:clean(GP.SHEETS.MODES),levels:clean(GP.SHEETS.LEVELS),costs:clean(GP.SHEETS.COSTS),budgets:clean(GP.SHEETS.BUDGETS),created:gpNow_()};
+  return {employees:clean(GP.SHEETS.EMPLOYEES),contracts:clean(GP.SHEETS.CONTRACTS),users:clean(GP.SHEETS.USERS),locations:clean(GP.SHEETS.LOCATIONS),shifts:clean(GP.SHEETS.SHIFT_TYPES),config:clean(GP.SHEETS.CONFIG),scenarios:clean(GP.SHEETS.SCENARIOS),modes:clean(GP.SHEETS.MODES),levels:clean(GP.SHEETS.LEVELS),shiftDefinitions:clean(GP.SHEETS.SHIFT_DEFINITIONS),staffingMatrix:clean(GP.SHEETS.STAFFING_MATRIX),extraFunctions:clean(GP.SHEETS.EXTRA_FUNCTIONS),dayExceptions:clean(GP.SHEETS.DAY_EXCEPTIONS),costs:clean(GP.SHEETS.COSTS),budgets:clean(GP.SHEETS.BUDGETS),created:gpNow_()};
 }
 
 function gpRestoreLocalSnapshot_(s){
@@ -112,6 +123,10 @@ function gpRestoreLocalSnapshot_(s){
   gpReplaceRows_(GP.SHEETS.SCENARIOS,s.scenarios||[]);
   gpReplaceRows_(GP.SHEETS.MODES,s.modes||[]);
   gpReplaceRows_(GP.SHEETS.LEVELS,s.levels||[]);
+  gpReplaceRows_(GP.SHEETS.SHIFT_DEFINITIONS,s.shiftDefinitions||[]);
+  gpReplaceRows_(GP.SHEETS.STAFFING_MATRIX,s.staffingMatrix||[]);
+  gpReplaceRows_(GP.SHEETS.EXTRA_FUNCTIONS,s.extraFunctions||[]);
+  gpReplaceRows_(GP.SHEETS.DAY_EXCEPTIONS,s.dayExceptions||[]);
   gpReplaceRows_(GP.SHEETS.COSTS,s.costs||[]);
   gpReplaceRows_(GP.SHEETS.BUDGETS,s.budgets||[]);
 }

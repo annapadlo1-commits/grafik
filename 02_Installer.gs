@@ -32,6 +32,7 @@ function gpInstall() {
     gpSeedConfig_();
     gpSeedCentralConfig_();
     gpSeedPlanningProfiles_();
+    gpInstallRealWorldModel_();
     gpApplyValidations_();
     gpCreateDashboard_();
     PropertiesService.getDocumentProperties().setProperty('GP_VERSION', GP.VERSION);
@@ -116,13 +117,13 @@ function gpCreateDashboard_() {
   sh.getRange('A4:H4').merge().setValue('CENTRUM PLANOWANIA • BUDŻET • ZASTĘPSTWA • ANALITYKA')
     .setBackground('#dbeafe').setFontColor('#1e3a8a').setFontWeight('bold').setHorizontalAlignment('center');
   const cards = [
-    ['A6:B8', 'PRACOWNICY', `COUNTA('${GP.SHEETS.EMPLOYEES}'!A2:A)`],
-    ['C6:D8', 'AKTYWNY PLAN', `COUNTIF('${GP.SHEETS.PLANS}'!F2:F,"${GP.PLAN_STATUS.PUBLISHED}")`],
-    ['E6:F8', 'ZMIANY', `COUNTA('${GP.SHEETS.ASSIGNMENTS}'!A2:A)`],
-    ['G6:H8', 'ALERTY', `COUNTIF('${GP.SHEETS.KPI}'!E2:E,"ALERT")`]
+    ['A6:B8', 'PRACOWNICY'],
+    ['C6:D8', 'AKTYWNY PLAN'],
+    ['E6:F8', 'PRZYDZIAŁY'],
+    ['G6:H8', 'ALERTY']
   ];
   cards.forEach(c => {
-    sh.getRange(c[0]).merge().setFormula(`="${c[1]}: "&${c[2]}`)
+    sh.getRange(c[0]).merge().setValue(`${c[1]}: 0`)
       .setBackground('#ffffff').setFontColor('#0f172a').setFontSize(15).setFontWeight('bold')
       .setHorizontalAlignment('center').setVerticalAlignment('middle');
   });
@@ -132,6 +133,7 @@ function gpCreateDashboard_() {
   sh.setColumnWidths(1, 8, 130);
   sh.setRowHeights(1, 15, 32);
   sh.setHiddenGridlines(true);
+  gpRefreshDashboard_();
 }
 
 function gpRepairPanelAndConnection(){
