@@ -1,6 +1,6 @@
 const GP = Object.freeze({
-  VERSION: '2.3.7-REAL-WORLD',
-  NAME: 'GRAFIK PRO DEMO 2.3.7',
+  VERSION: '2.3.9-REAL-WORLD',
+  NAME: 'GRAFIK PRO DEMO 2.3.9',
   TZ: 'Europe/Warsaw',
   LOCALE: 'pl_PL',
   SHEETS: {
@@ -126,6 +126,21 @@ function gpMonth_(value) {
   const d = value instanceof Date ? value : new Date(`${String(value).slice(0, 7)}-01T12:00:00`);
   if (isNaN(d)) throw new Error('Nieprawidłowy miesiąc.');
   return Utilities.formatDate(d, GP.TZ, 'yyyy-MM');
+}
+
+function gpTime_(value) {
+  if (value instanceof Date) return Utilities.formatDate(value, GP.TZ, 'HH:mm');
+  if (typeof value === 'number' && isFinite(value)) {
+    const minutes = Math.round((((value % 1) + 1) % 1) * 24 * 60) % (24 * 60);
+    return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+  }
+  const text = String(value == null ? '' : value).trim();
+  if (!text) return '';
+  const match = text.match(/(?:^|\s)([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?(?:\s|$)/);
+  if (match) return `${String(Number(match[1])).padStart(2, '0')}:${match[2]}`;
+  const parsed = new Date(text);
+  if (!isNaN(parsed)) return Utilities.formatDate(parsed, GP.TZ, 'HH:mm');
+  throw new Error(`Nieprawidłowa godzina: ${text}`);
 }
 
 function gpDate_(value) {

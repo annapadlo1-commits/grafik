@@ -7,7 +7,7 @@ function gpDashboardData(month, planId) {
   const shiftMap=Object.fromEntries(gpRows_(GP.SHEETS.SHIFT_TYPES).map(s=>[s.ID,s]));
   const byEmployee={};
   detail.assignments.forEach(a=>{
-    const start=a.OD?new Date(`2000-01-01T${a.OD}:00`):null,end=a.DO?new Date(`2000-01-${Number(a.DZIEŃ_PLUS||0)+1<10?'0':''}${Number(a.DZIEŃ_PLUS||0)+1}T${a.DO}:00`):null;
+    const start=a.OD?new Date(`2000-01-01T${gpTime_(a.OD)}:00`):null,end=a.DO?new Date(`2000-01-${Number(a.DZIEŃ_PLUS||0)+1<10?'0':''}${Number(a.DZIEŃ_PLUS||0)+1}T${gpTime_(a.DO)}:00`):null;
     const h=start&&end?(end-start)/3600000:Number((shiftMap[a.ZMIANA_ID]||{}).PŁATNE_H||0);
     byEmployee[a.PRACOWNIK_ID]=byEmployee[a.PRACOWNIK_ID]||{hours:0,shifts:0,cost:0,standby:0};
     byEmployee[a.PRACOWNIK_ID].hours+=h;byEmployee[a.PRACOWNIK_ID].shifts++;byEmployee[a.PRACOWNIK_ID].cost+=Number(a.KOSZT||0);
@@ -23,6 +23,10 @@ function gpDashboardData(month, planId) {
     daySeries:Object.keys(byDay).sort().map(date=>({date,value:byDay[date]})),
     locationCosts:Object.keys(byLocation).map(location=>({location,cost:gpRound_(byLocation[location])})),
     alerts:gpBuildAlerts_(detail,utilization)};
+}
+
+function gpDashboardDataClient(month, planId) {
+  return JSON.stringify(gpDashboardData(month, planId));
 }
 
 function gpBuildAlerts_(detail,utilization) {

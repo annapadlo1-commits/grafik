@@ -7,6 +7,10 @@ function gpMySchedule(month) {
   return gpRows_(GP.SHEETS.ASSIGNMENTS).filter(a=>a.PLAN_ID===plans[0].ID&&a.PRACOWNIK_ID===id).sort((a,b)=>gpDate_(a.DATA).localeCompare(gpDate_(b.DATA)));
 }
 
+function gpMyScheduleClient(month) {
+  return JSON.stringify(gpMySchedule(month));
+}
+
 function gpSubmitAvailability(payload) {
   const user=gpCurrentUser_(), employeeId=payload.employeeId||user.employeeId;
   if(!employeeId) throw new Error('Wybierz pracownika.');

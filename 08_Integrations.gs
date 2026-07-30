@@ -13,7 +13,7 @@ function gpImportKadromierz(rows) {
 
 function gpExportKadromierz(planId) {
   const detail=gpGetPlan(planId),employees=Object.fromEntries(gpRows_(GP.SHEETS.EMPLOYEES).map(e=>[e.ID,e])),locations=Object.fromEntries(gpRows_(GP.SHEETS.LOCATIONS).map(l=>[l.ID,l])),shifts=Object.fromEntries(gpRows_(GP.SHEETS.SHIFT_TYPES).map(s=>[s.ID,s]));
-  const rows=detail.assignments.filter(a=>a.STATUS!==GP.ASSIGNMENT_STATUS.CANCELLED).map(a=>({PRACOWNIK:(employees[a.PRACOWNIK_ID]||{}).EMAIL||a.PRACOWNIK_ID,DATA:gpDate_(a.DATA),OD:(shifts[a.ZMIANA_ID]||{}).START||'',DO:(shifts[a.ZMIANA_ID]||{}).KONIEC||'',LOKALIZACJA:(locations[a.LOKALIZACJA_ID]||{}).NAZWA||a.LOKALIZACJA_ID,TYP_ZMIANY:a.ZMIANA_ID,UWAGI:a.STANDBY==='TAK'?'STANDBY':''}));
+  const rows=detail.assignments.filter(a=>a.STATUS!==GP.ASSIGNMENT_STATUS.CANCELLED).map(a=>({PRACOWNIK:(employees[a.PRACOWNIK_ID]||{}).EMAIL||a.PRACOWNIK_ID,DATA:gpDate_(a.DATA),OD:gpTime_(a.OD||(shifts[a.ZMIANA_ID]||{}).START||''),DO:gpTime_(a.DO||(shifts[a.ZMIANA_ID]||{}).KONIEC||''),LOKALIZACJA:(locations[a.LOKALIZACJA_ID]||{}).NAZWA||a.LOKALIZACJA_ID,TYP_ZMIANY:a.ZMIANA_ID,UWAGI:a.STANDBY==='TAK'?'STANDBY':''}));
   gpReplaceRows_(GP.SHEETS.EXPORT,rows);
   const csv=[GP_HEADERS[GP.SHEETS.EXPORT].join(';')].concat(rows.map(r=>GP_HEADERS[GP.SHEETS.EXPORT].map(h=>`"${String(r[h]||'').replace(/"/g,'""')}"`).join(';'))).join('\r\n');
   const blob=Utilities.newBlob('\uFEFF'+csv,'text/csv',`GRAFIK_PRO_${detail.plan.MIESIĄC}_${planId}.csv`);

@@ -5,6 +5,7 @@ function onOpen() {
     .addItem('Ustaw adres aplikacji pełnoekranowej', 'gpConfigureWebAppUrl')
     .addSeparator()
     .addItem('Napraw panel i połączenie', 'gpRepairPanelAndConnection')
+    .addItem('Napraw format godzin w przydziałach', 'gpRepairAssignmentTimes')
     .addItem('Instaluj / napraw strukturę', 'gpInstall')
     .addItem('Załaduj pełne dane DEMO', 'gpLoadDemo')
     .addItem('Synchronizuj trzy centrale', 'gpSyncCentrals')
@@ -139,6 +140,7 @@ function gpCreateDashboard_() {
 }
 
 function gpRepairPanelAndConnection(){
+  const repairedTimes=gpRepairAssignmentTimes_(false);
   gpCreateDashboard_();
   PropertiesService.getDocumentProperties().setProperty('GP_VERSION',GP.VERSION);
   SpreadsheetApp.flush();
@@ -148,5 +150,27 @@ function gpRepairPanelAndConnection(){
     `GRAFIK PRO ${GP.VERSION}`,8
   );
   if(!url)gpConfigureWebAppUrl();
-  return {ok:true,version:GP.VERSION,urlConfigured:!!url};
+  return {ok:true,version:GP.VERSION,urlConfigured:!!url,repairedTimes};
+}
+
+function gpRepairAssignmentTimes(){
+  const repaired=gpRepairAssignmentTimes_(true);
+  return {ok:true,repaired};
+}
+
+function gpRepairAssignmentTimes_(showToast){
+  const rows=gpRows_(GP.SHEETS.ASSIGNMENTS).map(gpCleanRow_);
+  let repaired=0;
+  rows.forEach(row=>{
+    const beforeOd=String(row.OD||''),beforeDo=String(row.DO||'');
+    const afterOd=beforeOd?gpTime_(row.OD):'',afterDo=beforeDo?gpTime_(row.DO):'';
+    if(afterOd!==beforeOd||afterDo!==beforeDo)repaired++;
+    row.OD=afterOd;row.DO=afterDo;
+  });
+  if(repaired)gpReplaceRows_(GP.SHEETS.ASSIGNMENTS,rows);
+  if(showToast)SpreadsheetApp.getActive().toast(
+    repaired?`Poprawiono godziny w ${repaired} przydziałach.`:'Wszystkie godziny mają już prawidłowy format HH:mm.',
+    GP.NAME,8
+  );
+  return repaired;
 }

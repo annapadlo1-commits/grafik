@@ -366,7 +366,7 @@ function gpSlotTimes_(slot,ctx){
   const date=gpDate_(slot.DATA),day=gpDayCode_(new Date(`${date}T12:00:00`));
   const def=ctx.definitions.find(d=>d.LOKALIZACJA_ID===slot.LOKALIZACJA_ID&&d.DZIEŃ_TYGODNIA===day&&d.ZMIANA_ID===slot.ZMIANA_ID);
   const shift=def||ctx.maps.shift[slot.ZMIANA_ID]||{START:'10:00',KONIEC:'18:00',KONIEC_DZIEŃ_PLUS:0};
-  const startText=String(slot.START_OVERRIDE||shift.START),endText=String(slot.KONIEC_OVERRIDE||shift.KONIEC),plus=slot.DZIEŃ_PLUS_OVERRIDE!==undefined&&slot.DZIEŃ_PLUS_OVERRIDE!==''?Number(slot.DZIEŃ_PLUS_OVERRIDE):Number(shift.KONIEC_DZIEŃ_PLUS||0);
+  const startText=gpTime_(slot.START_OVERRIDE||shift.START),endText=gpTime_(slot.KONIEC_OVERRIDE||shift.KONIEC),plus=slot.DZIEŃ_PLUS_OVERRIDE!==undefined&&slot.DZIEŃ_PLUS_OVERRIDE!==''?Number(slot.DZIEŃ_PLUS_OVERRIDE):Number(shift.KONIEC_DZIEŃ_PLUS||0);
   const start=new Date(`${date}T${startText}:00`),end=new Date(`${date}T${endText}:00`);end.setDate(end.getDate()+plus);
   return {start,end,startText,endText,plus};
 }
@@ -452,7 +452,7 @@ function gpAddRotationalSegment(payload){
   const all=gpRows_(GP.SHEETS.ASSIGNMENTS).filter(a=>a.PLAN_ID===payload.planId&&a.PRACOWNIK_ID===emp.ID&&gpDate_(a.DATA)===gpDate_(payload.date));
   const buffer=Number(gpConfig_().BUFOR_PRZEJAZDU_MIN||30)*60000;
   all.forEach(a=>{const s=new Date(`${gpDate_(a.DATA)}T${a.OD}:00`),e=new Date(`${gpDate_(a.DATA)}T${a.DO}:00`);e.setDate(e.getDate()+Number(a.DZIEŃ_PLUS||0));if(start<new Date(e.getTime()+buffer)&&end>new Date(s.getTime()-buffer))throw new Error('Segment koliduje z pracą lub nie zachowuje buforu przejazdu.');});
-  const row={ID:gpId_('ASG'),PLAN_ID:payload.planId,DATA:gpDate_(payload.date),LOKALIZACJA_ID:payload.location,ZMIANA_ID:'SEGMENT_EVENT',OD:payload.start,DO:payload.end,DZIEŃ_PLUS:plus,PRACOWNIK_ID:emp.ID,ROLA:'BARMAN',FUNKCJA:'EVENT_ROTACYJNY',KLASYFIKACJA:'EVENT_ROTACYJNY',STANDBY:'NIE',STATUS:GP.ASSIGNMENT_STATUS.PLANNED,KOSZT:0,ŹRÓDŁO:'EVENT_ROTACYJNY',UWAGI:payload.notes||'Segment szczytowy'};
+  const row={ID:gpId_('ASG'),PLAN_ID:payload.planId,DATA:gpDate_(payload.date),LOKALIZACJA_ID:payload.location,ZMIANA_ID:'SEGMENT_EVENT',OD:gpTime_(payload.start),DO:gpTime_(payload.end),DZIEŃ_PLUS:plus,PRACOWNIK_ID:emp.ID,ROLA:'BARMAN',FUNKCJA:'EVENT_ROTACYJNY',KLASYFIKACJA:'EVENT_ROTACYJNY',STANDBY:'NIE',STATUS:GP.ASSIGNMENT_STATUS.PLANNED,KOSZT:0,ŹRÓDŁO:'EVENT_ROTACYJNY',UWAGI:payload.notes||'Segment szczytowy'};
   gpAppend_(GP.SHEETS.ASSIGNMENTS,row);gpAudit_('CREATE','ROTATIONAL_SEGMENT',row.ID,null,row);return {ok:true,row};
 }
 

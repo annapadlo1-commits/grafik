@@ -77,8 +77,8 @@ function gpOptimize_(ctx) {
   const demand = ctx.demand.slice().sort((a,b) => {
     const date=gpDate_(a.DATA).localeCompare(gpDate_(b.DATA));
     if(date)return date;
-    const startA=String((ctx.maps.shift[a.ZMIANA_ID]||{}).START||'00:00');
-    const startB=String((ctx.maps.shift[b.ZMIANA_ID]||{}).START||'00:00');
+    const startA=gpTime_((ctx.maps.shift[a.ZMIANA_ID]||{}).START||'00:00');
+    const startB=gpTime_((ctx.maps.shift[b.ZMIANA_ID]||{}).START||'00:00');
     return startA.localeCompare(startB)||Number(b.PRIORYTET||1)-Number(a.PRIORYTET||1)||String(a.LOKALIZACJA_ID).localeCompare(String(b.LOKALIZACJA_ID));
   });
   let uncovered = 0,hardViolations = 0,preferencePoints = 0,costSoFar=0,totalMinimum=0,totalTarget=0;

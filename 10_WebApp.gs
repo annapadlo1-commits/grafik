@@ -90,3 +90,7 @@ function gpBootstrap(){
     plans:gpListPlans(month),
     health:{score:Number(PropertiesService.getDocumentProperties().getProperty('GP_LAST_HEALTH_SCORE')||0)}};
 }
+
+function gpBootstrapClient(){
+  return JSON.stringify(gpBootstrap());
+}

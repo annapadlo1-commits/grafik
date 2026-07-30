@@ -4,6 +4,10 @@ function gpListPlans(month) {
   return plans.sort((a,b)=>String(b.UTWORZONO).localeCompare(String(a.UTWORZONO)));
 }
 
+function gpListPlansClient(month) {
+  return JSON.stringify(gpListPlans(month));
+}
+
 function gpGetPlan(planId) {
   const plan=gpRows_(GP.SHEETS.PLANS).find(p=>p.ID===planId);
   if(!plan) throw new Error('Nie znaleziono planu.');
