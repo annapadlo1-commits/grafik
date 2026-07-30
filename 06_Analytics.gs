@@ -26,7 +26,12 @@ function gpDashboardData(month, planId) {
 }
 
 function gpDashboardDataClient(month, planId) {
-  return JSON.stringify(gpDashboardData(month, planId));
+  const normalized=gpMonth_(month||new Date()),key=`GP_DASH_${normalized}_${planId||'AUTO'}`;
+  const cached=CacheService.getScriptCache().get(key);
+  if(cached)return cached;
+  const json=JSON.stringify(gpDashboardData(normalized,planId));
+  if(json.length<95000)CacheService.getScriptCache().put(key,json,60);
+  return json;
 }
 
 function gpBuildAlerts_(detail,utilization) {

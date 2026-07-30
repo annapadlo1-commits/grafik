@@ -403,19 +403,22 @@ function gpGetRoleSchedule(planId,role,location){
 function gpValidatePlan_(planId){
   const plan=gpRows_(GP.SHEETS.PLANS).find(p=>p.ID===planId);if(!plan)return {ok:false,errors:[{type:'BRAK_PLANU'}],warnings:[]};
   const asg=gpRows_(GP.SHEETS.ASSIGNMENTS).filter(a=>a.PLAN_ID===planId&&a.STATUS!==GP.ASSIGNMENT_STATUS.CANCELLED);
-  const ctx=gpBuildRealContext_(gpMonth_(plan.MIESIĄC),{}),errors=[],warnings=[],employees=Object.fromEntries(ctx.employees.map(e=>[e.ID,e]));
+  const month=gpMonth_(plan.MIESIĄC),employeeRows=gpRows_(GP.SHEETS.EMPLOYEES);
+  const demand=gpApplyCalendarChanges_(gpRows_(GP.SHEETS.DEMAND).filter(d=>gpMonth_(d.DATA)===month),month);
+  const errors=[],warnings=[],employees=Object.fromEntries(employeeRows.map(e=>[e.ID,e])),assignmentsBySlot={};
   asg.forEach(a=>{
     const emp=employees[a.PRACOWNIK_ID];
     if(!emp)errors.push({type:'BRAK_PRACOWNIKA',assignment:a.ID});
     else if(emp.ROLA_GŁÓWNA!==a.ROLA)errors.push({type:'NIEZGODNA_ROLA',assignment:a.ID,expected:a.ROLA,actual:emp.ROLA_GŁÓWNA});
     if(emp&&!gpCanWorkLocation_(emp,a.LOKALIZACJA_ID))errors.push({type:'NIEDOZWOLONA_LOKALIZACJA',assignment:a.ID});
+    const base=[gpDate_(a.DATA),a.LOKALIZACJA_ID,a.ZMIANA_ID,a.ROLA].join('|');
+    (assignmentsBySlot[base]||(assignmentsBySlot[base]=[])).push(a);
   });
-  const coverage={};asg.forEach(a=>{const key=[gpDate_(a.DATA),a.LOKALIZACJA_ID,a.ZMIANA_ID,a.ROLA,a.FUNKCJA||''].join('|');coverage[key]=(coverage[key]||0)+1;});
-  ctx.demand.forEach(d=>{
+  demand.forEach(d=>{
     const fn=String(d.FUNKCJA_WYMAGANA||''),base=[gpDate_(d.DATA),d.LOKALIZACJA_ID,d.ZMIANA_ID,d.ROLA].join('|');
-    const total=asg.filter(a=>[gpDate_(a.DATA),a.LOKALIZACJA_ID,a.ZMIANA_ID,a.ROLA].join('|')===base).length;
+    const own=assignmentsBySlot[base]||[],total=own.length;
     if(total<Number(d.MIN_OSÓB||0))warnings.push({type:'NIEDOBÓR',date:gpDate_(d.DATA),location:d.LOKALIZACJA_ID,shift:d.ZMIANA_ID,role:d.ROLA,missing:Number(d.MIN_OSÓB)-total});
-    if(fn){const qualified=asg.filter(a=>[gpDate_(a.DATA),a.LOKALIZACJA_ID,a.ZMIANA_ID,a.ROLA].join('|')===base&&gpHasFunction_(employees[a.PRACOWNIK_ID]||{},fn)).length;if(qualified<1)errors.push({type:'BRAK_WYMAGANEJ_FUNKCJI',date:gpDate_(d.DATA),location:d.LOKALIZACJA_ID,shift:d.ZMIANA_ID,role:d.ROLA,function:fn});}
+    if(fn&&!own.some(a=>gpHasFunction_(employees[a.PRACOWNIK_ID]||{},fn)))errors.push({type:'BRAK_WYMAGANEJ_FUNKCJI',date:gpDate_(d.DATA),location:d.LOKALIZACJA_ID,shift:d.ZMIANA_ID,role:d.ROLA,function:fn});
   });
   return {ok:errors.length===0,errors,warnings};
 }
